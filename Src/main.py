@@ -5,25 +5,26 @@ import json
 import os
 import subprocess
 from collections import defaultdict
+
 import pytchat
 import yt_dlp
 
 # Load configuration from config.json
-config = json.load(open('config.json', 'r'))
+with open("config.json", "r", encoding="utf-8") as config_file:
+    config = json.load(config_file)
 
-YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
-RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
-VLC_PATH = config['VLC_PATH']
-PREFIX = config['PREFIX']
+YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "YOUR_LIVESTREAM_ID")
+RATE_LIMIT_SECONDS = config.get("RATE_LIMIT_SECONDS", 600)
+VLC_PATH = config.get("VLC_PATH", "C:\\Program Files (x86)\\VideoLAN\\VLC\\vlc.exe")
 user_last_command = defaultdict(lambda: 0)
-
 
 # Video queue
 video_queue = []
 
 
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
-subprocess.Popen(VLC_STARTCOMMAND, shell=True)
+with subprocess.Popen(VLC_STARTCOMMAND, shell=True) as process:
+    pass
 
 def play_next_video():
     """Plays the next video in the queue."""
@@ -38,14 +39,13 @@ def play_next_video():
         print("Queue is empty. Waiting for new videos...")
 
 def download_audio(video_id):
-    global config
     """Downloads audio for the given YouTube Music video ID."""
     video_url = f"https://music.youtube.com/watch?v={video_id}"
 
     ydl_opts = {
         'format': 'bestaudio/best',
         #Download directory
-        'outtmpl': os.path.join("audio", f"{video_id}.%(ext)s"),  
+        'outtmpl': os.path.join("downloads", f"{video_id}.%(ext)s"),  
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -53,13 +53,13 @@ def download_audio(video_id):
         }],
         'noplaylist': True,
         'quiet': True,
-        'ffmpeg_location': config["FFMPEG_PATH"]  # Use the path from config
+        'ffmpeg_location': config.get("FFMPEG_PATH", "ffmpeg")  # Use the path from config
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([video_url])  # Download the audio
         # Return the path of the downloaded audio file
-        return os.path.join("audio", f"{video_id}.mp3")
+        return os.path.join("downloads", f"{video_id}.mp3")
 
 def add_to_vlc_queue(audio_file):
     """Adds the downloaded audio file to VLC's playlist queue."""
@@ -73,14 +73,13 @@ def add_to_vlc_queue(audio_file):
         print(f"Error adding video to VLC queue: {e}")
 
 def on_chat_message(chat):
-    global PREFIX
     """Handles incoming chat messages."""
     username = chat.author.name
     message = chat.message
     current_time = time.time()
 
     # Check if the message starts with !queue
-    if message.startswith(f"{PREFIX}queue"):
+    if message.startswith("!queue"):
         parts = message.split()
         if len(parts) < 2:
             return  # Ignore invalid command format
@@ -110,5 +109,5 @@ def start_chat_listener():
             on_chat_message(message)  # Handle chat messages for song queuing
         time.sleep(1)
 
-
-start_chat_listener()
+if __name__ == "__main__":
+    start_chat_listener()
