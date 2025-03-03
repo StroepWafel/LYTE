@@ -9,7 +9,9 @@ import pytchat
 import yt_dlp
 
 # Load configuration from config.json
-config = json.load(open('config.json', 'r'))
+#(uses "with" to prevent memory leaks) specify encoding just in case
+with open('config.json', 'r', encoding="utf-8") as f:
+    config = json.load(f)
 
 YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
 RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
@@ -24,7 +26,9 @@ video_queue = []
 
 
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
-subprocess.Popen(VLC_STARTCOMMAND, shell=True)
+#start VLC (once again uses with to prevent memory leaks)
+with subprocess.Popen(VLC_STARTCOMMAND, shell=True):
+    pass
 
 def play_next_video():
     """Plays the next video in the queue."""
@@ -39,7 +43,6 @@ def play_next_video():
         print("Queue is empty. Waiting for new videos...")
 
 def download_audio(video_id):
-    global config
     """Downloads audio for the given YouTube Music video ID."""
     video_url = f"https://music.youtube.com/watch?v={video_id}"
 
@@ -74,8 +77,6 @@ def add_to_vlc_queue(audio_file):
         print(f"Error adding video to VLC queue: {e}")
 
 def on_chat_message(chat):
-    global PREFIX
-    global QUEUE_COMMAND
     """Handles incoming chat messages."""
     username = chat.author.name
     message = chat.message
