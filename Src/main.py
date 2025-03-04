@@ -21,8 +21,8 @@ VLC_PATH = config['VLC_PATH']
 FFMPEG_PATH = config['FFMPEG_PATH']
 if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Linux" in platform.platform():
     FFMPEG_PATH = "/usr/bin/ffmpeg"
-elif FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
-    FFMPEG_PATH = "/ffmpeg"
+if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
+    FFMPEG_PATH = "ffmpeg\\ffmpeg.exe"
 PREFIX = config['PREFIX']
 user_last_command = defaultdict(lambda: 0)
 
