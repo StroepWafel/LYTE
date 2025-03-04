@@ -30,15 +30,16 @@ The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the
       - __MacOS:__ [MacOS FFmpeg](https://evermeet.cx/ffmpeg/ffmpeg-7.1.1.zip"). Ignore the next step; put the default path into the JSON.
       - __Linux:__ Linux FFmpeg: Use your package manager (e.g. `sudo apt install ffmpeg` or `sudo pacman -S ffmpeg`). Ignore the next step; put the default path into the JSON.
 8. __(Windows ONLY)__ Move everything from the bin folder to src/ffmpeg and then delete the placeholder file "DELETEME".
-9. Locate the path of the VLC media player, generally found in "C:\Program Files\VideoLAN\VLC" or "C:\Program Files (x86)\VideoLAN\VLC"
-10. Open the file "config.json" in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
-11. Change "YOUR\_LIVESTREAM\_ID" to the ID of your live stream (Ie, the characters at the end of the URL, after the "/live/")
-12. Change the value for "RATE\_LIMIT\_SECONDS". This is how long users have to wait before they can request another song (in seconds)
-13. Replace "PATH\_TO\_VLC\_HERE" with the path to your VLC&#x20;
-14. Run main.py, and VLC will open.
+9. Locate the path of the VLC media player, generally found in "C:\Program Files\VideoLAN\VLC" or "C:\Program Files (x86)\VideoLAN\VLC" by right clicking the file and selecting "Copy as path"
+10. Locate the path of the 
+11. Open the file "config.json" in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
+12. Change "YOUR\_LIVESTREAM\_ID" to the ID of your live stream (Ie, the characters at the end of the URL, after the "/live/")
+13. Change the value for "RATE\_LIMIT\_SECONDS". This is how long users have to wait before they can request another song (in seconds)
+14. Replace "PATH\_TO\_VLC\_HERE" with the path to your VLC&#x20;
+15. Run main.py, and VLC will open.
 
 > [!CAUTION]
->__ON WINDOWS, USE DOUBLE BACKSLASHES INSTEAD OF SINGLE, `C:\Program Files\VideoLAN\VLC` MUST BECOME `C:\\Program Files\\VideoLAN\\VLC\\vlc.exe`. Linux and MacOS users only need to use a single slash `/`__
+>__ON WINDOWS, USE DOUBLE BACKSLASHES INSTEAD OF SINGLE, `C:\Program Files\VideoLAN\VLC` MUST BECOME `C:\\Program Files\\VideoLAN\\VLC\\vlc.exe` (do the same with the ffmpeg.exe location). Linux and MacOS users only need to use a single slash `/`__
 
 > [!TIP]
 >Please turn off loop mode in VLC; otherwise, if the song queue runs out, you will have to listen to the whole playlist again before you get to the new ones
