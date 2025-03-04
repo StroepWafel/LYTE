@@ -13,7 +13,7 @@ YouTube Live Music  (YTLM) is a stupid little bot I coded (with a little help fr
 
 ### !queue
 
-The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the Url for the youtube music video (everything after the "v=")&#x20;
+The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the Url for the youtube music video
 
 > [!IMPORTANT]
 >THIS COMMAND ONLY WORKS WITH URLs OF VIDEOS THAT ARE ON YOUTUBE MUSIC; REGULAR VIDEOS WILL NOT DOWNLOAD
