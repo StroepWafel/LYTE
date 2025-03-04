@@ -53,7 +53,7 @@ The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the
 
 - This program can be run on any Windows PC with no API key or cookie required
 - If used, please credit the repository in the description or somewhere in the video
-- This program has not been tested on any other OS, and it is unknown if it works
+
 
 ## Star history
 
