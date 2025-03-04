@@ -5,14 +5,14 @@ import json
 import os
 import subprocess
 from collections import defaultdict
+import platform
 import pytchat
 import yt_dlp
-import platform
 
 # Load configuration from config.json
 #(uses "with" to prevent memory leaks) specify encoding just in case
 
-config = json.load(open('config.json', 'r', encoding="utf-8")) 
+config = json.load(open('config.json', 'r', encoding="utf-8"))
 
 YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
 RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
