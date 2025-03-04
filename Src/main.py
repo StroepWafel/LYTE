@@ -12,7 +12,8 @@ import yt_dlp
 # Load configuration from config.json
 #(uses "with" to prevent memory leaks) specify encoding just in case
 
-config = json.load(open('config.json', 'r', encoding="utf-8"))
+with open('config.json', 'r', encoding="utf-8") as f:
+    config = json.load(f)
 
 YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
 RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
