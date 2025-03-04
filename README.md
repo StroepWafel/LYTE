@@ -38,7 +38,7 @@ The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the
 14. Run main.py, and VLC will open.
 
 > [!CAUTION]
->__ON WINDOWS, USE DOUBLE BACKSLASHES INSTEAD OF SINGLE, `C:\Program Files\VideoLAN\VLC` MUST BECOME `C:\\\Program Files\\\VideoLAN\\\VLC\\\vlc.exe`. Linux and MacOS users only need to use a single slash `/`__
+>__ON WINDOWS, USE DOUBLE BACKSLASHES INSTEAD OF SINGLE, `C:\Program Files\VideoLAN\VLC` MUST BECOME `C:\\Program Files\\VideoLAN\\VLC\\vlc.exe`. Linux and MacOS users only need to use a single slash `/`__
 
 > [!TIP]
 >Please turn off loop mode in VLC; otherwise, if the song queue runs out, you will have to listen to the whole playlist again before you get to the new ones
