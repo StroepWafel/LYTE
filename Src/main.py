@@ -48,7 +48,7 @@ def play_next_video():
 
 def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
-    video_url = f"https://music.youtube.com/watch?v={video_id}"
+    video_url = f"{video_id}"
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -91,8 +91,9 @@ def on_chat_message(chat):
         parts = message.split()
         if len(parts) < 2:
             return  # Ignore invalid command format
-
-        video_id = parts[1]  # Expecting just the video ID
+        if 'youtube.com/watch?v=' not in parts[1]:
+            return # Ignore invalid URL syntax
+        video_id = parts[1]  # Expecting just the video URL
 
         # Enforce rate limit
         if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
