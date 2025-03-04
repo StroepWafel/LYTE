@@ -1,5 +1,5 @@
 # YTLM
-YouTube Live Music  (YTLM) is a stupid little bot I coded (with a little help from AI) that allows viewers of a live stream to use commands to queue music
+YouTube Live Music (YTLM) is a silly little bot that allows viewers of a live stream to use commands to queue music
 
 # Contents:
 
