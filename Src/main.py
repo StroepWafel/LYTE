@@ -33,7 +33,7 @@ video_queue = []
 
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
 #start VLC (once again uses with to prevent memory leaks)
-vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True)
+vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True) # pylint: disable=consider-using-with
 
 
 def play_next_video():
