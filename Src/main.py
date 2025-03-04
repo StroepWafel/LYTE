@@ -19,8 +19,10 @@ YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
 RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
 VLC_PATH = config['VLC_PATH']
 FFMPEG_PATH = config['FFMPEG_PATH']
-if FFMPEG_PATH == "" and "Linux" in platform.platform():
+if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Linux" in platform.platform():
     FFMPEG_PATH = "/usr/bin/ffmpeg"
+elif FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
+    FFMPEG_PATH = "/ffmpeg
 PREFIX = config['PREFIX']
 user_last_command = defaultdict(lambda: 0)
 
