@@ -13,7 +13,7 @@ YouTube Live Music (YTLM) is a bot that allows viewers of a live stream to use c
 
 ### !queue
 
-The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the Url for the youtube music video
+The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the Url for the youtube music video, however the command listener (exclamation mark) and command (the word queue) can be changed in the [config](#config-documentation) if desired.
 
 > [!IMPORTANT]
 >THIS COMMAND ONLY WORKS WITH URLs OF VIDEOS THAT ARE ON YOUTUBE MUSIC; REGULAR VIDEOS WILL NOT DOWNLOAD
@@ -47,9 +47,13 @@ The command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL> is the
 
 ## Config Documentation
 
-#Todo
+### Command Prefix
+This configuration option allows you to set any character as the listener prefix for commands. To do this, change the value in quotation marks to whatever you desire — it can even be multiple characters!
 
-## Notes
+### Queue Command
+This configuration option allows you to set any string as the command for queueing a song. Simply change the value in the quotation marks to the desired command.
+
+# Notes
 
 - This program can be run on any Windows PC with no API key or cookie required
 - If used, please credit the repository in the description or somewhere in the video
