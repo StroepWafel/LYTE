@@ -10,7 +10,8 @@ import pytchat
 import yt_dlp
 
 # Load configuration from config.json
-#(uses "with" to prevent memory leaks) specify encoding just in case
+# (uses "with" to prevent memory leaks)
+# specify encoding just in case
 
 with open('config.json', 'r', encoding="utf-8") as f:
     config = json.load(f)
@@ -32,7 +33,8 @@ video_queue = []
 
 
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
-#start VLC (once again uses with to prevent memory leaks)
+#start VLC (as subprocess)
+#comment at end to disable pylint for this line
 vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True) # pylint: disable=consider-using-with
 
 
