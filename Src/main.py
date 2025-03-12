@@ -73,11 +73,11 @@ def download_audio(video_id):
         'quiet': True,
         'ffmpeg_location': config["FFMPEG_PATH"]  # Use the path from config
     }
-    
+
     if f'{video_id}.mp3' in os.listdir("audio"):
         print("File  Already Exists, adding to queue!")
         return os.path.join("audio", f"{video_id}.mp3")
-        
+
     print("File not downloaded, downloading...")
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([video_url])  # Download the audio
