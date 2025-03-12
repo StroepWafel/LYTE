@@ -5,17 +5,25 @@ import json
 import os
 import subprocess
 from collections import defaultdict
+import platform
 import pytchat
 import yt_dlp
 
 # Load configuration from config.json
-#(uses "with" to prevent memory leaks) specify encoding just in case
+# (uses "with" to prevent memory leaks)
+# specify encoding just in case
+
 with open('config.json', 'r', encoding="utf-8") as f:
     config = json.load(f)
 
 YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
 RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
 VLC_PATH = config['VLC_PATH']
+FFMPEG_PATH = config['FFMPEG_PATH']
+if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Linux" in platform.platform():
+    FFMPEG_PATH = "/usr/bin/ffmpeg"
+if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
+    FFMPEG_PATH = "ffmpeg\\ffmpeg.exe"
 PREFIX = config['PREFIX']
 QUEUE_COMMAND = config['QUEUE_COMMAND']
 user_last_command = defaultdict(lambda: 0)
@@ -26,9 +34,10 @@ video_queue = []
 
 
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
-#start VLC (once again uses with to prevent memory leaks)
-with subprocess.Popen(VLC_STARTCOMMAND, shell=True):
-    pass
+#start VLC (as subprocess)
+#comment at end to disable pylint for this line
+vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True) # pylint: disable=consider-using-with
+
 
 def play_next_video():
     """Plays the next video in the queue."""
