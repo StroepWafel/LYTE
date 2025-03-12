@@ -3,5 +3,6 @@
     "RATE_LIMIT_SECONDS": 600,
     "VLC_PATH": "PATH_TO_VLC_HERE",
     "FFMPEG_PATH": "PATH_TO_FFMPEG_HERE",
-    "PREFIX": "!"
+    "PREFIX": "!",
+    "QUEUE_COMMAND": "queue"
 }
