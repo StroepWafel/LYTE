@@ -73,16 +73,16 @@ def download_audio(video_id):
         'quiet': True,
         'ffmpeg_location': config["FFMPEG_PATH"]  # Use the path from config
     }
+    
     if f'{video_id}.mp3' in os.listdir("audio"):
         print("File  Already Exists, adding to queue!")
         return os.path.join("audio", f"{video_id}.mp3")
-
-    else:
-        print("File not downloaded, downloading...")
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])  # Download the audio
-            # Return the path of the downloaded audio file
-            return os.path.join("audio", f"{video_id}.mp3")
+        
+    print("File not downloaded, downloading...")
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([video_url])  # Download the audio
+        # Return the path of the downloaded audio file
+        return os.path.join("audio", f"{video_id}.mp3")
 
 def add_to_vlc_queue(audio_file):
     """Adds the downloaded audio file to VLC's playlist queue."""
@@ -113,21 +113,20 @@ def on_chat_message(chat):
         if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
             print(f"{username} is sending commands too fast! Ignored.")
             return
-        else:
-            #Is video Id banned?
-            if video_id in BANNED_IDS:
-                #if banned, do nothing ToDo: add ban strikes
-                print(f"{username} tried to add a banned song to the queue! Ignored.")
-                return
-            else:
-                # Add to queue and update rate limit
-                video_queue.append(video_id)
-                user_last_command[username] = current_time
-                print(f"{username} added to queue: {video_id}")
 
-                # If nothing is playing, start playback
-                if len(video_queue) == 1:
-                    play_next_video()
+        #Is video Id banned?
+        if video_id in BANNED_IDS:
+            #if banned, do nothing ToDo: add ban strikes
+            print(f"{username} tried to add a banned song to the queue! Ignored.")
+            return
+        # Add to queue and update rate limit
+        video_queue.append(video_id)
+        user_last_command[username] = current_time
+        print(f"{username} added to queue: {video_id}")
+
+        # If nothing is playing, start playback
+        if len(video_queue) == 1:
+            play_next_video()
 
 def start_chat_listener():
     '''Start listening to YouTube chat'''
