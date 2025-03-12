@@ -10,11 +10,12 @@ import pytchat
 import yt_dlp
 
 # Load configuration from config.json
-# (uses "with" to prevent memory leaks)
-# specify encoding just in case
+#(uses "with" to prevent memory leaks) specify encoding just in case
 
 with open('config.json', 'r', encoding="utf-8") as f:
     config = json.load(f)
+with open("banned_IDs.json", "r", encoding="utf-8") as f:
+    bannedIDs = json.load(f)
 
 YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
 RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
@@ -26,6 +27,9 @@ if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
     FFMPEG_PATH = "ffmpeg\\ffmpeg.exe"
 PREFIX = config['PREFIX']
 QUEUE_COMMAND = config['QUEUE_COMMAND']
+BANNED_IDS = bannedIDs
+
+
 user_last_command = defaultdict(lambda: 0)
 
 
@@ -34,8 +38,7 @@ video_queue = []
 
 
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
-#start VLC (as subprocess)
-#comment at end to disable pylint for this line
+#start VLC (once again uses with to prevent memory leaks)
 vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True) # pylint: disable=consider-using-with
 
 
@@ -43,6 +46,8 @@ def play_next_video():
     """Plays the next video in the queue."""
     if video_queue:
         next_video_id = video_queue.pop(0)
+        #only download if file does not exist
+
         print(f"Now downloading and adding to VLC queue: {next_video_id}")
 
         # Download the audio and get the file path
@@ -68,11 +73,16 @@ def download_audio(video_id):
         'quiet': True,
         'ffmpeg_location': config["FFMPEG_PATH"]  # Use the path from config
     }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([video_url])  # Download the audio
-        # Return the path of the downloaded audio file
+    if f'{video_id}.mp3' in os.listdir("audio"):
+        print("File  Already Exists, adding to queue!")
         return os.path.join("audio", f"{video_id}.mp3")
+
+    else:
+        print("File not downloaded, downloading...")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])  # Download the audio
+            # Return the path of the downloaded audio file
+            return os.path.join("audio", f"{video_id}.mp3")
 
 def add_to_vlc_queue(audio_file):
     """Adds the downloaded audio file to VLC's playlist queue."""
@@ -103,15 +113,21 @@ def on_chat_message(chat):
         if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
             print(f"{username} is sending commands too fast! Ignored.")
             return
+        else:
+            #Is video Id banned?
+            if video_id in BANNED_IDS:
+                #if banned, do nothing ToDo: add ban strikes
+                print(f"{username} tried to add a banned song to the queue! Ignored.")
+                return
+            else:
+                # Add to queue and update rate limit
+                video_queue.append(video_id)
+                user_last_command[username] = current_time
+                print(f"{username} added to queue: {video_id}")
 
-        # Add to queue and update rate limit
-        video_queue.append(video_id)
-        user_last_command[username] = current_time
-        print(f"{username} added to queue: {video_id}")
-
-        # If nothing is playing, start playback
-        if len(video_queue) == 1:
-            play_next_video()
+                # If nothing is playing, start playback
+                if len(video_queue) == 1:
+                    play_next_video()
 
 def start_chat_listener():
     '''Start listening to YouTube chat'''
