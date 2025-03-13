@@ -116,7 +116,7 @@ def on_chat_message(chat):
 
         #Is video Id banned?
         if video_id in BANNED_IDS:
-            #if banned, do nothing ToDo: add ban strikes
+            #if banned, do nothing., ToDo: add ban strikes
             print(f"{username} tried to add a banned song to the queue! Ignored.")
             return
         # Add to queue and update rate limit
