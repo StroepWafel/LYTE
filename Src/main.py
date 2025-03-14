@@ -92,8 +92,8 @@ def play_next_video():
             add_to_vlc_queue(audio_file)
         else:
             logging.info("Queue is empty. Waiting for new videos...")
-        except (IndexError, TypeError) as e:
-            logging.error(f"Error in play_next_video: {e}")
+    except (IndexError, TypeError) as e:
+        logging.error(f"Error in play_next_video: {e}")
 
 def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
