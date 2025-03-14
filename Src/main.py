@@ -3,6 +3,10 @@ YTLM uses pytchat to fetch the chat of a youtube livestream so that the
 viewers can use commands to queue music on the streamer's PC
 """
 
+# screw you pylint
+# pylint: disable=W0718
+
+
 import time
 import json
 import os
@@ -41,11 +45,8 @@ try:
         config = json.load(f)
     with open("banned_IDs.json", "r", encoding="utf-8") as f:
         bannedIDs = json.load(f)
-except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-    logging.critical("Error while loading files: %s", e)
-    sys.exit(1)
 except Exception as e:
-    logging.error("Unexpected error occurred: %s", e)
+    logging.critical("Error while loading files: %s", e)
     sys.exit(1)
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
@@ -83,14 +84,14 @@ def play_next_video():
             add_to_vlc_queue(audio_file)
         else:
             logging.info("Queue is empty. Waiting for new videos...")
-    except (IndexError, TypeError) as e:
+    except Exception as e:
         logging.error("Error in play_next_video: %s", e)
 
 def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
     try:
         video_url = f"https://music.youtube.com/watch?v={video_id}"
-        
+
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': os.path.join("audio", f"{video_id}.%(ext)s"),  
@@ -107,19 +108,13 @@ def download_audio(video_id):
         if f'{video_id}.mp3' in os.listdir("audio"):
             logging.info("File already exists, adding to queue!")
             return os.path.join("audio", f"{video_id}.mp3")
-        
+
         logging.info("File not downloaded, downloading...")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
             return os.path.join("audio", f"{video_id}.mp3")
-    except yt_dlp.DownloadError as e:
-        logging.error("Download error: %s", e)
-        return ""
-    except (OSError, subprocess.SubprocessError) as e:
-        logging.error("OS or subprocess error during download: %s", e)
-        return ""
     except Exception as e:
-        logging.error("Error downloading audio: %s", e)
+        logging.error("Unexpected error downloading audio: %s", e)
         return ""
 
 def add_to_vlc_queue(audio_file):
@@ -132,8 +127,6 @@ def add_to_vlc_queue(audio_file):
         with subprocess.Popen(vlc_command, shell=True):
             pass
         logging.info("Added %s to VLC queue.", audio_file)
-    except subprocess.SubprocessError as e:
-        logging.error("Error adding video to VLC queue: %s", e)
     except Exception as e:
         logging.error("Unexpected error in add_to_vlc_queue: %s", e)
 
@@ -143,30 +136,28 @@ def on_chat_message(chat):
         username = chat.author.name
         message = chat.message
         current_time = time.time()
-        
+
         if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
             parts = message.split()
             if len(parts) < 2:
-                return  
-            
-            video_id = parts[1]  
-            
+                return
+
+            video_id = parts[1]
+
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 logging.warning("%s is sending commands too fast! Ignored.", username)
                 return
-            
+
             if video_id in BANNED_IDS:
                 logging.warning("%s tried to add a banned song to the queue! Ignored.", username)
                 return
-            
+
             video_queue.append(video_id)
             user_last_command[username] = current_time
             logging.info("%s added to queue: %s", username, video_id)
-            
+
             if len(video_queue) == 1:
                 play_next_video()
-    except (KeyError, IndexError) as e:
-        logging.error("Error processing chat message: %s", e)
     except Exception as e:
         logging.error("Unexpected error processing chat message: %s", e)
 
@@ -179,14 +170,8 @@ def start_chat_listener():
             for message in chat.get().sync_items():
                 on_chat_message(message)
             time.sleep(1)
-    except pytchat.LiveChatError as e:
-        logging.critical("Error with live chat: %s", e)
-        sys.exit(1)
-    except (OSError, subprocess.SubprocessError) as e:
-        logging.critical("System or subprocess error: %s", e)
-        sys.exit(1)
     except Exception as e:
-        logging.critical("An unexpected error occurred: %s", e)
+        logging.critical("An unexpected error occurred in chat listener: %s", e)
         sys.exit(1)
 
 start_chat_listener()
