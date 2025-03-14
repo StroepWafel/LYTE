@@ -1,141 +1,166 @@
-"""YouTube live chat bot for queueing and playing YouTube Music videos via VLC."""
-
 import time
 import json
 import os
+import logging
 import subprocess
 from collections import defaultdict
 import platform
 import pytchat
 import yt_dlp
+from datetime import datetime
 
-# Load configuration from config.json
-#(uses "with" to prevent memory leaks) specify encoding just in case
+# Specify the folder to store logs
+log_folder = 'logs'
 
-with open('config.json', 'r', encoding="utf-8") as f:
-    config = json.load(f)
-with open("banned_IDs.json", "r", encoding="utf-8") as f:
-    bannedIDs = json.load(f)
+# Ensure the log and audio folders exist
+os.makedirs(log_folder, exist_ok=True)
+os.makedirs("audio", exist_ok=True)
 
-YOUTUBE_VIDEO_ID = config["YOUTUBE_VIDEO_ID"]
-RATE_LIMIT_SECONDS = config['RATE_LIMIT_SECONDS']
-VLC_PATH = config['VLC_PATH']
-FFMPEG_PATH = config['FFMPEG_PATH']
+#set up logging system
+log_filename = os.path.join(log_folder, f"app_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Set up file handler to log to a file with the generated log filename
+file_handler = logging.FileHandler(log_filename)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+file_handler.setLevel(logging.INFO)
+
+# Add the file handler to the logger
+logging.getLogger().addHandler(file_handler)
+
+try:
+    # Load configuration from config.json
+    with open('config.json', 'r', encoding="utf-8") as f:
+        config = json.load(f)
+    with open("banned_IDs.json", "r", encoding="utf-8") as f:
+        bannedIDs = json.load(f)
+except Exception as e:
+    logging.critical(f"Failed to load configuration files: {e}")
+    exit(1)
+
+YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
+RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 10)
+VLC_PATH = config.get('VLC_PATH', "vlc")
+FFMPEG_PATH = config.get('FFMPEG_PATH', "ffmpeg")
 if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Linux" in platform.platform():
     FFMPEG_PATH = "/usr/bin/ffmpeg"
 if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
     FFMPEG_PATH = "ffmpeg\\ffmpeg.exe"
-PREFIX = config['PREFIX']
-QUEUE_COMMAND = config['QUEUE_COMMAND']
+PREFIX = config.get('PREFIX', "!")
+QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
 BANNED_IDS = bannedIDs
 
-
 user_last_command = defaultdict(lambda: 0)
-
 
 # Video queue
 video_queue = []
 
-
 VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
-#start VLC (once again uses with to prevent memory leaks)
-vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True) # pylint: disable=consider-using-with
-
+try:
+    vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True)  # pylint: disable=consider-using-with
+except Exception as e:
+    logging.critical(f"Failed to start VLC: {e}")
+    exit(1)
 
 def play_next_video():
     """Plays the next video in the queue."""
-    if video_queue:
-        next_video_id = video_queue.pop(0)
-        #only download if file does not exist
-
-        print(f"Now downloading and adding to VLC queue: {next_video_id}")
-
-        # Download the audio and get the file path
-        audio_file = download_audio(next_video_id)
-        add_to_vlc_queue(audio_file)  # Add the audio file to VLC queue
-    else:
-        print("Queue is empty. Waiting for new videos...")
+    try:
+        if video_queue:
+            next_video_id = video_queue.pop(0)
+            logging.info(f"Now downloading and adding to VLC queue: {next_video_id}")
+            
+            audio_file = download_audio(next_video_id)
+            add_to_vlc_queue(audio_file)
+        else:
+            logging.info("Queue is empty. Waiting for new videos...")
+    except Exception as e:
+        logging.error(f"Error in play_next_video: {e}")
 
 def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
-    video_url = f"https://music.youtube.com/watch?v={video_id}"
+    try:
+        video_url = f"https://music.youtube.com/watch?v={video_id}"
+        
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join("audio", f"{video_id}.%(ext)s"),  
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'noplaylist': True,
+            'quiet': True,
+            'ffmpeg_location': config["FFMPEG_PATH"]
+        }
 
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        #Download directory
-        'outtmpl': os.path.join("audio", f"{video_id}.%(ext)s"),  
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'noplaylist': True,
-        'quiet': True,
-        'ffmpeg_location': config["FFMPEG_PATH"]  # Use the path from config
-    }
-
-    if f'{video_id}.mp3' in os.listdir("audio"):
-        print("File  Already Exists, adding to queue!")
-        return os.path.join("audio", f"{video_id}.mp3")
-
-    print("File not downloaded, downloading...")
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([video_url])  # Download the audio
-        # Return the path of the downloaded audio file
-        return os.path.join("audio", f"{video_id}.mp3")
+        if f'{video_id}.mp3' in os.listdir("audio"):
+            logging.info("File already exists, adding to queue!")
+            return os.path.join("audio", f"{video_id}.mp3")
+        
+        logging.info("File not downloaded, downloading...")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+            return os.path.join("audio", f"{video_id}.mp3")
+    except Exception as e:
+        logging.error(f"Error downloading audio: {e}")
+        return ""
 
 def add_to_vlc_queue(audio_file):
     """Adds the downloaded audio file to VLC's playlist queue."""
     try:
-        # Ensure the VLC path is quoted
+        if not audio_file:
+            logging.warning("No audio file provided to add_to_vlc_queue.")
+            return
         vlc_command = f'"{VLC_PATH}" --one-instance --playlist-enqueue "{audio_file}"'
-        with subprocess.Popen(vlc_command, shell=True):  # Execute command in shell
+        with subprocess.Popen(vlc_command, shell=True):
             pass
-        print(f"Added {audio_file} to VLC queue.")
-    except (subprocess.SubprocessError, OSError) as e:
-        print(f"Error adding video to VLC queue: {e}")
+        logging.info(f"Added {audio_file} to VLC queue.")
+    except Exception as e:
+        logging.error(f"Error adding video to VLC queue: {e}")
 
 def on_chat_message(chat):
     """Handles incoming chat messages."""
-    username = chat.author.name
-    message = chat.message
-    current_time = time.time()
-
-    # Check if the message starts with !queue
-    if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
-        parts = message.split()
-        if len(parts) < 2:
-            return  # Ignore invalid command format
-
-        video_id = parts[1]  # Expecting just the video ID
-
-        # Enforce rate limit
-        if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
-            print(f"{username} is sending commands too fast! Ignored.")
-            return
-
-        #Is video Id banned?
-        if video_id in BANNED_IDS:
-            #if banned, do nothing., ToDo: add ban strikes
-            print(f"{username} tried to add a banned song to the queue! Ignored.")
-            return
-        # Add to queue and update rate limit
-        video_queue.append(video_id)
-        user_last_command[username] = current_time
-        print(f"{username} added to queue: {video_id}")
-
-        # If nothing is playing, start playback
-        if len(video_queue) == 1:
-            play_next_video()
+    try:
+        username = chat.author.name
+        message = chat.message
+        current_time = time.time()
+        
+        if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
+            parts = message.split()
+            if len(parts) < 2:
+                return  
+            
+            video_id = parts[1]  
+            
+            if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
+                logging.warning(f"{username} is sending commands too fast! Ignored.")
+                return
+            
+            if video_id in BANNED_IDS:
+                logging.warning(f"{username} tried to add a banned song to the queue! Ignored.")
+                return
+            
+            video_queue.append(video_id)
+            user_last_command[username] = current_time
+            logging.info(f"{username} added to queue: {video_id}")
+            
+            if len(video_queue) == 1:
+                play_next_video()
+    except Exception as e:
+        logging.error(f"Error processing chat message: {e}")
 
 def start_chat_listener():
-    '''Start listening to YouTube chat'''
-    print("Listening to YouTube Live Chat...")
-    chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
-    while chat.is_alive():
-        for message in chat.get().sync_items():
-            on_chat_message(message)  # Handle chat messages for song queuing
-        time.sleep(1)
-
+    """Start listening to YouTube chat."""
+    try:
+        logging.info("Listening to YouTube Live Chat...")
+        chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
+        while chat.is_alive():
+            for message in chat.get().sync_items():
+                on_chat_message(message)
+            time.sleep(1)
+    except Exception as e:
+        logging.critical(f"Chat listener encountered an error: {e}")
+        exit(1)
 
 start_chat_listener()
