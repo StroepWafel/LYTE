@@ -1,4 +1,5 @@
 import time
+import sys
 import json
 import os
 import logging
@@ -8,11 +9,12 @@ import platform
 from datetime import datetime
 import pytchat
 import yt_dlp
-import sys
 
 """
-YTLM uses pytchat to fetch the chat of a youtube livestream so that the
-viewers can use commands to queue music on the streamer's PC
+This script listens to YouTube live chat, adds YouTube video IDs to a queue,
+downloads their audio, and plays them using VLC media player.
+
+It interacts with YouTube and manages video audio downloading and playback.
 """
 
 # Specify the folder to store logs
