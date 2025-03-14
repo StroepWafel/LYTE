@@ -41,20 +41,11 @@ try:
         config = json.load(f)
     with open("banned_IDs.json", "r", encoding="utf-8") as f:
         bannedIDs = json.load(f)
-except FileNotFoundError as e:
-    logging.critical(f"File not found: {e}")
-    sys.exit(1)
-except KeyError as e:
-    logging.critical(f"Missing key: {e}")
-    sys.exit(1)
-except json.JSONDecodeError as e:
-    logging.critical(f"Error parsing JSON: {e}")
-    sys.exit(1)
 except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-    logging.error(f"Error while loading files: {e}")
+    logging.critical("Error while loading files: %s", e)
     sys.exit(1)
 except Exception as e:
-    logging.error(f"An unexpected error occurred while loading files: {e}")
+    logging.error("Unexpected error occurred: %s", e)
     sys.exit(1)
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
@@ -78,7 +69,7 @@ VLC_STARTCOMMAND = f'"{VLC_PATH}" --one-instance'
 try:
     vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True)  # pylint: disable=consider-using-with
 except Exception as e:
-    logging.critical(f"Failed to start VLC: {e}")
+    logging.critical("Failed to start VLC: %s", e)
     sys.exit(1)
 
 def play_next_video():
@@ -86,14 +77,14 @@ def play_next_video():
     try:
         if video_queue:
             next_video_id = video_queue.pop(0)
-            logging.info(f"Now downloading and adding to VLC queue: {next_video_id}")
+            logging.info("Now downloading and adding to VLC queue: %s", next_video_id)
 
             audio_file = download_audio(next_video_id)
             add_to_vlc_queue(audio_file)
         else:
             logging.info("Queue is empty. Waiting for new videos...")
     except (IndexError, TypeError) as e:
-        logging.error(f"Error in play_next_video: {e}")
+        logging.error("Error in play_next_video: %s", e)
 
 def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
@@ -122,15 +113,14 @@ def download_audio(video_id):
             ydl.download([video_url])
             return os.path.join("audio", f"{video_id}.mp3")
     except yt_dlp.DownloadError as e:
-        logging.error(f"Download error: {e}")
+        logging.error("Download error: %s", e)
         return ""
     except (OSError, subprocess.SubprocessError) as e:
-        logging.error(f"OS or subprocess error during download: {e}")
+        logging.error("OS or subprocess error during download: %s", e)
         return ""
     except Exception as e:
-        logging.error(f"Error downloading audio: {e}")
+        logging.error("Error downloading audio: %s", e)
         return ""
-
 
 def add_to_vlc_queue(audio_file):
     """Adds the downloaded audio file to VLC's playlist queue."""
@@ -141,12 +131,11 @@ def add_to_vlc_queue(audio_file):
         vlc_command = f'"{VLC_PATH}" --one-instance --playlist-enqueue "{audio_file}"'
         with subprocess.Popen(vlc_command, shell=True):
             pass
-        logging.info(f"Added {audio_file} to VLC queue.")
+        logging.info("Added %s to VLC queue.", audio_file)
     except subprocess.SubprocessError as e:
-        logging.error(f"Error adding video to VLC queue: {e}")
+        logging.error("Error adding video to VLC queue: %s", e)
     except Exception as e:
-        logging.error(f"Unexpected error in add_to_vlc_queue: {e}")
-
+        logging.error("Unexpected error in add_to_vlc_queue: %s", e)
 
 def on_chat_message(chat):
     """Handles incoming chat messages."""
@@ -163,24 +152,23 @@ def on_chat_message(chat):
             video_id = parts[1]  
             
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
-                logging.warning(f"{username} is sending commands too fast! Ignored.")
+                logging.warning("%s is sending commands too fast! Ignored.", username)
                 return
             
             if video_id in BANNED_IDS:
-                logging.warning(f"{username} tried to add a banned song to the queue! Ignored.")
+                logging.warning("%s tried to add a banned song to the queue! Ignored.", username)
                 return
             
             video_queue.append(video_id)
             user_last_command[username] = current_time
-            logging.info(f"{username} added to queue: {video_id}")
+            logging.info("%s added to queue: %s", username, video_id)
             
             if len(video_queue) == 1:
                 play_next_video()
     except (KeyError, IndexError) as e:
-        logging.error(f"Error processing chat message: {e}")
+        logging.error("Error processing chat message: %s", e)
     except Exception as e:
-        logging.error(f"Unexpected error processing chat message: {e}")
-
+        logging.error("Unexpected error processing chat message: %s", e)
 
 def start_chat_listener():
     """Start listening to YouTube chat."""
@@ -191,14 +179,14 @@ def start_chat_listener():
             for message in chat.get().sync_items():
                 on_chat_message(message)
             time.sleep(1)
-    except pytchat.PytchatLiveChatError as e:
-        logging.critical(f"Error with live chat: {e}")
+    except pytchat.LiveChatError as e:
+        logging.critical("Error with live chat: %s", e)
         sys.exit(1)
     except (OSError, subprocess.SubprocessError) as e:
-        logging.critical(f"System or subprocess error: {e}")
+        logging.critical("System or subprocess error: %s", e)
         sys.exit(1)
     except Exception as e:
-        logging.critical(f"An unexpected error occurred: {e}")
+        logging.critical("An unexpected error occurred: %s", e)
         sys.exit(1)
 
 start_chat_listener()
