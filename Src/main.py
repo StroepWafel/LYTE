@@ -1,20 +1,19 @@
 import time
-import sys
 import json
 import os
 import logging
 import subprocess
+import sys
 from collections import defaultdict
 import platform
 from datetime import datetime
 import pytchat
 import yt_dlp
 
-"""
-This script listens to YouTube live chat, adds YouTube video IDs to a queue,
-downloads their audio, and plays them using VLC media player.
 
-It interacts with YouTube and manages video audio downloading and playback.
+"""
+YTLM uses pytchat to fetch the chat of a youtube livestream so that the
+viewers can use commands to queue music on the streamer's PC
 """
 
 # Specify the folder to store logs
@@ -47,6 +46,9 @@ except FileNotFoundError as e:
     sys.exit(1)
 except KeyError as e:
     logging.critical(f"Missing key: {e}")
+    sys.exit(1)
+except json.JSONDecodeError as e:
+    logging.critical(f"Error parsing JSON: {e}")
     sys.exit(1)
 except Exception as e:
     logging.error(f"An unexpected error occurred while loading files: {e}")
@@ -116,6 +118,9 @@ def download_audio(video_id):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
             return os.path.join("audio", f"{video_id}.mp3")
+    except yt_dlp.DownloadError as e:
+        logging.error(f"Download error: {e}")
+        return ""
     except Exception as e:
         logging.error(f"Error downloading audio: {e}")
         return ""
@@ -130,7 +135,7 @@ def add_to_vlc_queue(audio_file):
         with subprocess.Popen(vlc_command, shell=True):
             pass
         logging.info(f"Added {audio_file} to VLC queue.")
-    except Exception as e:
+    except subprocess.SubprocessError as e:
         logging.error(f"Error adding video to VLC queue: {e}")
 
 def on_chat_message(chat):
@@ -173,8 +178,11 @@ def start_chat_listener():
             for message in chat.get().sync_items():
                 on_chat_message(message)
             time.sleep(1)
+    except pytchat.PytchatLiveChatError as e:
+        logging.critical(f"Error with live chat: {e}")
+        sys.exit(1)
     except Exception as e:
-        logging.critical(f"Chat listener encountered an error: {e}")
+        logging.critical(f"An error occurred: {e}")
         sys.exit(1)
 
 start_chat_listener()
