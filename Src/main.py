@@ -121,15 +121,15 @@ def download_audio(video_id):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
             return os.path.join("audio", f"{video_id}.mp3")
-        except yt_dlp.DownloadError as e:
-            logging.error(f"Download error: {e}")
-            return ""
-        except (OSError, subprocess.SubprocessError) as e:
-            logging.error(f"OS or subprocess error during download: {e}")
-            return ""
-        except Exception as e:
-            logging.error(f"Error downloading audio: {e}")
-            return ""
+    except yt_dlp.DownloadError as e:
+        logging.error(f"Download error: {e}")
+        return ""
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.error(f"OS or subprocess error during download: {e}")
+        return ""
+    except Exception as e:
+        logging.error(f"Error downloading audio: {e}")
+        return ""
 
 
 def add_to_vlc_queue(audio_file):
