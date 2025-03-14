@@ -32,10 +32,10 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 8. __(Windows ONLY)__ Move everything from the bin folder to src/ffmpeg and then delete the placeholder file "DELETEME".
 9. Locate the path of the VLC media player, generally found in `C:\Program Files\VideoLAN\VLC\vlc.exe` or `C:\Program Files (x86)\VideoLAN\VLC\vlc.exe` by right clicking the file and selecting "Copy as path"
 10. Locate the path of the 
-11. Open the file "config.json" in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
-12. Change "YOUR\_LIVESTREAM\_ID" to the ID of your live stream (Ie, the characters at the end of the URL, after the "/live/")
-13. Change the value for "RATE\_LIMIT\_SECONDS". This is how long users have to wait before they can request another song (in seconds)
-14. Replace "PATH\_TO\_VLC\_HERE" with the path to your VLC&#x20;
+11. Open the file config.json in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
+12. Change `YOUR\_LIVESTREAM\_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `/live/`)
+13. Change the value for `RATE\_LIMIT\_SECONDS`. This is how long users have to wait before they can request another song (in seconds)
+14. Replace `PATH\_TO\_VLC\_HERE` with the path to your VLC&#x20;
 15. Run main.py, and VLC will open.
 
 > [!CAUTION]
