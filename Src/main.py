@@ -90,7 +90,6 @@ def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
     try:
         video_url = f"https://music.youtube.com/watch?v={video_id}"
-        
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': os.path.join("audio", f"{video_id}.%(ext)s"),  
@@ -107,7 +106,6 @@ def download_audio(video_id):
         if f'{video_id}.mp3' in os.listdir("audio"):
             logging.info("File already exists, adding to queue!")
             return os.path.join("audio", f"{video_id}.mp3")
-        
         logging.info("File not downloaded, downloading...")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
@@ -138,26 +136,20 @@ def on_chat_message(chat):
         username = chat.author.name
         message = chat.message
         current_time = time.time()
-        
         if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
             parts = message.split()
             if len(parts) < 2:
-                return  
-            
+                return
             video_id = parts[1]  
-            
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 logging.warning("%s is sending commands too fast! Ignored.", username)
                 return
-            
             if video_id in BANNED_IDS:
                 logging.warning("%s tried to add a banned song to the queue! Ignored.", username)
                 return
-            
             video_queue.append(video_id)
             user_last_command[username] = current_time
             logging.info("%s added to queue: %s", username, video_id)
-            
             if len(video_queue) == 1:
                 play_next_video()
     except Exception as e:
