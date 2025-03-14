@@ -1,3 +1,8 @@
+"""
+YTLM uses pytchat to fetch the chat of a youtube livestream so that the
+viewers can use commands to queue music on the streamer's PC
+"""
+
 import time
 import json
 import os
@@ -10,11 +15,6 @@ from datetime import datetime
 import pytchat
 import yt_dlp
 
-
-"""
-YTLM uses pytchat to fetch the chat of a youtube livestream so that the
-viewers can use commands to queue music on the streamer's PC
-"""
 
 # Specify the folder to store logs
 LOG_FOLDER = 'logs'
@@ -84,7 +84,7 @@ def play_next_video():
         if video_queue:
             next_video_id = video_queue.pop(0)
             logging.info(f"Now downloading and adding to VLC queue: {next_video_id}")
-            
+
             audio_file = download_audio(next_video_id)
             add_to_vlc_queue(audio_file)
         else:
