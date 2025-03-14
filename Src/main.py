@@ -5,19 +5,25 @@ import logging
 import subprocess
 from collections import defaultdict
 import platform
+from datetime import datetime
 import pytchat
 import yt_dlp
-from datetime import datetime
+import sys
+
+"""
+YTLM uses pytchat to fetch the chat of a youtube livestream so that the
+viewers can use commands to queue music on the streamer's PC
+"""
 
 # Specify the folder to store logs
-log_folder = 'logs'
+LOG_FOLDER = 'logs'
 
 # Ensure the log and audio folders exist
-os.makedirs(log_folder, exist_ok=True)
+os.makedirs(LOG_FOLDER, exist_ok=True)
 os.makedirs("audio", exist_ok=True)
 
-#set up logging system
-log_filename = os.path.join(log_folder, f"app_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+# Set up logging system
+log_filename = os.path.join(LOG_FOLDER, f"app_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Set up file handler to log to a file with the generated log filename
@@ -34,9 +40,15 @@ try:
         config = json.load(f)
     with open("banned_IDs.json", "r", encoding="utf-8") as f:
         bannedIDs = json.load(f)
+except FileNotFoundError as e:
+    logging.critical(f"File not found: {e}")
+    sys.exit(1)
+except KeyError as e:
+    logging.critical(f"Missing key: {e}")
+    sys.exit(1)
 except Exception as e:
-    logging.critical(f"Failed to load configuration files: {e}")
-    exit(1)
+    logging.error(f"An unexpected error occurred while loading files: {e}")
+    sys.exit(1)
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
 RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 10)
@@ -60,7 +72,7 @@ try:
     vlc_process = subprocess.Popen(VLC_STARTCOMMAND, shell=True)  # pylint: disable=consider-using-with
 except Exception as e:
     logging.critical(f"Failed to start VLC: {e}")
-    exit(1)
+    sys.exit(1)
 
 def play_next_video():
     """Plays the next video in the queue."""
@@ -161,6 +173,6 @@ def start_chat_listener():
             time.sleep(1)
     except Exception as e:
         logging.critical(f"Chat listener encountered an error: {e}")
-        exit(1)
+        sys.exit(1)
 
 start_chat_listener()
