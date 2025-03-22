@@ -3,10 +3,18 @@ YouTube Live Music (YTLM) is a bot that allows viewers of a live stream to use c
 
 # Contents:
 
-- [Commands](#commands)  
-  - [!queue](#queue)  
+- [Commands](#commands)
+  - [!queue](#queue)
 - [Setup](#setup)
 - [Config Documentation](#config-documentation)
+  - [YOUTUBE_VIDEO_ID](#youtube_video_id)
+  - [RATE_LIMIT_SECONDS](#rate_limit_seconds)  
+  - [VLC_PATH](#vlc_path)  
+  - [FFMPEG_PATH](#ffmpeg_path)
+  - [PREFIX](#prefix)  
+  - [QUEUE_COMMAND](#queue_command)
+  - [banned_IDs.json](#banned_idsjson)
+  - [banned_users.json](#banned_usersjson)
 - [Notes](#notes)  
  
 ## Commands
@@ -47,12 +55,35 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 
 ## Config Documentation
 
-### Command Prefix
+### YOUTUBE_VIDEO_ID
+This is where you enter the ID to your youtube video.
+
+### RATE_LIMIT_SECONDS
+How long a user has to wait before they can queue another song, in seconds.
+
+### VLC_PATH
+The path to your local VLC install (including the .exe name)
+
+### FFMPEG_PATH
+The path to your local ffmpeg install (including the .exe name)
+
+### PREFIX
 This configuration option allows you to set any character as the listener prefix for commands. To do this, change the value in quotation marks to whatever you desire — it can even be multiple characters!
 
-### Queue Command
+### QUEUE_COMMAND
 This configuration option allows you to set any string as the command for queueing a song. Simply change the value in the quotation marks to the desired command.
 
+### banned_IDs.json
+this file is used to store all banned youtube video IDs, for the time being you will have to add them manually to the file, each video id should be in quotation marks and seperated by commas, for example:
+```JSON
+["<Video ID 1>", "<Video ID 2>", "<Video ID 3>"]
+```
+
+### banned_users.json
+this file is used to store all banned youtube user handles, for the time being you will have to add them manually to the file, each handle should be in quotation marks and seperated by commas, for example:
+```JSON
+["<@Handle 1>", "<@Handle 2>", "<@Handle 3>"]
+```
 # Notes
 
 - This program can be run on any Windows PC with no API key or cookie required
