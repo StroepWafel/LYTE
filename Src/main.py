@@ -156,7 +156,7 @@ def on_chat_message(chat):
                 return
 
             if username in BANNED_USERS:
-                logging.warning("%s tried to add a song to the queue but they are banned! Ignored.", username)
+                logging.warning("%s tried to queue a song but are banned! Ignored.", username)
                 return
 
             video_queue.append(video_id)
