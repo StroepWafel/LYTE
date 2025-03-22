@@ -45,6 +45,8 @@ try:
         config = json.load(f)
     with open("banned_IDs.json", "r", encoding="utf-8") as f:
         bannedIDs = json.load(f)
+    with open("banned_users.json", "r", encoding="utf-8") as f:
+        bannedUsers = json.load(f)
 except Exception as e:
     logging.critical("Error while loading files: %s", e)
     sys.exit(1)
@@ -60,6 +62,7 @@ if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
 PREFIX = config.get('PREFIX', "!")
 QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
 BANNED_IDS = bannedIDs
+BANNED_USERS = bannedUsers
 
 user_last_command = defaultdict(lambda: 0)
 
@@ -150,6 +153,10 @@ def on_chat_message(chat):
 
             if video_id in BANNED_IDS:
                 logging.warning("%s tried to add a banned song to the queue! Ignored.", username)
+                return
+
+            if username in BANNED_USERS:
+                logging.warning("%s tried to add a song to the queue but they are banned! Ignored.", username)
                 return
 
             video_queue.append(video_id)
