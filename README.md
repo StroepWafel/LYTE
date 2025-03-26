@@ -11,6 +11,7 @@ YouTube Live Music (YTLM) is a bot that allows viewers of a live stream to use c
   - [RATE_LIMIT_SECONDS](#rate_limit_seconds)  
   - [VLC_PATH](#vlc_path)  
   - [FFMPEG_PATH](#ffmpeg_path)
+  - [TOAST_NOTIFICATIONS](#toast_notifications)
   - [PREFIX](#prefix)  
   - [QUEUE_COMMAND](#queue_command)
   - [banned_IDs.json](#banned_idsjson)
@@ -66,6 +67,12 @@ The path to your local VLC install (including the .exe name)
 
 ### FFMPEG_PATH
 The path to your local ffmpeg install (including the .exe name)
+
+### TOAST_NOTIFICATIONS
+>[!CAUTION]
+>The following setting is case sensitive, please make sure to use a capital "T" when writing "True"\
+
+Setting this to ```True``` (default) will enable toast notifications that pop up with the song name and requester, setting it to any other value will disable these notifications
 
 ### PREFIX
 This configuration option allows you to set any character as the listener prefix for commands. To do this, change the value in quotation marks to whatever you desire — it can even be multiple characters!
