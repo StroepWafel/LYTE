@@ -1,2 +1,4 @@
 pytchat 
 yt-dlp
+requests
+plyer
