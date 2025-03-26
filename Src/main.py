@@ -14,6 +14,7 @@ import logging
 import subprocess
 import sys
 import re
+import threading
 from collections import defaultdict
 import platform
 from datetime import datetime
@@ -41,6 +42,13 @@ file_handler.setLevel(logging.INFO)
 
 # Add the file handler to the logger
 logging.getLogger().addHandler(file_handler)
+
+# disable post request logs
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+logging.getLogger('httpx').setLevel(logging.ERROR)
+logging.getLogger('httpcore').setLevel(logging.ERROR)
+
+
 
 try:
     # Load configuration from config.json
@@ -98,19 +106,21 @@ def get_video_name(video_id):
         return(title)
 
 def play_next_video():
-    """Plays the next video in the queue."""
+    """Plays the next video in the queue, starts downloading it in a separate thread."""
     try:
         if video_queue:
             next_video_id = video_queue.pop(0)
             logging.info("Now downloading and adding to VLC queue: %s", next_video_id)
 
-            audio_file = download_audio(next_video_id)
-            add_to_vlc_queue(audio_file)
+            # Start a thread to download and play the next video
+            download_thread = threading.Thread(target=download_audio_threaded, args=(next_video_id,))
+            download_thread.start()
             
         else:
             logging.info("Queue is empty. Waiting for new videos...")
     except Exception as e:
         logging.error("Error in play_next_video: %s", e)
+
 
 def download_audio(video_id):
     """Downloads audio for the given YouTube Music video ID."""
@@ -141,6 +151,18 @@ def download_audio(video_id):
     except Exception as e:
         logging.error("Unexpected error downloading audio: %s", e)
         return ""
+    
+
+def download_audio_threaded(video_id):
+    """Downloads audio for the given YouTube Music video ID in a separate thread."""
+    try:
+        audio_file = download_audio(video_id)  # Download audio in the background
+        if audio_file:
+            add_to_vlc_queue(audio_file)  # Add downloaded file to VLC queue
+        else:
+            logging.warning("Failed to download audio for video ID: %s", video_id)
+    except Exception as e:
+        logging.error("Unexpected error downloading audio for video %s: %s", video_id, e)
 
 def add_to_vlc_queue(audio_file):
     """Adds the downloaded audio file to VLC's playlist queue."""
@@ -178,7 +200,7 @@ def on_chat_message(chat):
                 return
 
             if username in BANNED_USERS:
-                logging.warning("%s tried to queue a song but are banned! Ignored.", username)
+                logging.warning("%s tried to queue a song but is banned! Ignored.", username)
                 return
 
             video_queue.append(video_id)
@@ -189,9 +211,10 @@ def on_chat_message(chat):
                 show_toast(video_id, username)
 
             if len(video_queue) == 1:
-                play_next_video()
+                play_next_video()  # Start playing the next video if this is the first in the queue
     except Exception as e:
         logging.error("Unexpected error processing chat message: %s", e)
+
 
 def start_chat_listener():
     """Start listening to YouTube chat."""
