@@ -89,6 +89,7 @@ except Exception as e:
     sys.exit(1)
 
 def show_toast(video_id, username):
+    """Creates a toast notification about adding song to queue"""
     notification.notify(
         title="Requested by: " + username,
         message="Adding '" + get_video_name(video_id) + "' to queue",
@@ -96,14 +97,19 @@ def show_toast(video_id, username):
     )
 
 def get_video_name(video_id):
+    """Gets name of video from youtube website,pretends to be a browser"""
     url = f"https://www.youtube.com/watch?v={video_id}"
     headers = {"User-Agent": "Mozilla/5.0"}  # Mimic browser
-    response = requests.get(url, headers=headers)
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=10)
 
     match = re.search(r'<title>(.*?)</title>', response.text)
     if match:
         title = match.group(1).replace(" - YouTube", "").strip()
-        return(title)
+        return title
+    return "title unavailable"
 
 def play_next_video():
     """Plays the next video in the queue, starts downloading it in a separate thread."""
@@ -113,9 +119,12 @@ def play_next_video():
             logging.info("Now downloading and adding to VLC queue: %s", next_video_id)
 
             # Start a thread to download and play the next video
-            download_thread = threading.Thread(target=download_audio_threaded, args=(next_video_id,))
+            download_thread = threading.Thread(
+                target=download_audio_threaded,
+                args=(next_video_id,)
+            )
             download_thread.start()
-            
+
         else:
             logging.info("Queue is empty. Waiting for new videos...")
     except Exception as e:
@@ -151,7 +160,7 @@ def download_audio(video_id):
     except Exception as e:
         logging.error("Unexpected error downloading audio: %s", e)
         return ""
-    
+
 
 def download_audio_threaded(video_id):
     """Downloads audio for the given YouTube Music video ID in a separate thread."""
@@ -206,7 +215,7 @@ def on_chat_message(chat):
             video_queue.append(video_id)
             user_last_command[username] = current_time
             logging.info("%s added to queue: %s", username, video_id)
-            
+
             if TOAST_NOTIFICATIONS:
                 show_toast(video_id, username)
 
