@@ -13,11 +13,14 @@ import os
 import logging
 import subprocess
 import sys
+import re
 from collections import defaultdict
 import platform
 from datetime import datetime
 import pytchat
 import yt_dlp
+import requests
+from plyer import notification
 
 
 # Specify the folder to store logs
@@ -59,6 +62,7 @@ if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Linux" in platform.platform():
     FFMPEG_PATH = "/usr/bin/ffmpeg"
 if FFMPEG_PATH == "PATH_TO_FFMPEG_HERE" and "Windows" in platform.platform():
     FFMPEG_PATH = "ffmpeg\\ffmpeg.exe"
+TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True")
 PREFIX = config.get('PREFIX', "!")
 QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
 BANNED_IDS = bannedIDs
@@ -76,6 +80,23 @@ except Exception as e:
     logging.critical("Failed to start VLC: %s", e)
     sys.exit(1)
 
+def show_toast(video_id, username):
+    notification.notify(
+        title="Requested by: " + username,
+        message="Adding '" + get_video_name(video_id) + "' to queue",
+        timeout=5  # Notification disappears after 5 seconds
+    )
+
+def get_video_name(video_id):
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    headers = {"User-Agent": "Mozilla/5.0"}  # Mimic browser
+    response = requests.get(url, headers=headers)
+
+    match = re.search(r'<title>(.*?)</title>', response.text)
+    if match:
+        title = match.group(1).replace(" - YouTube", "").strip()
+        return(title)
+
 def play_next_video():
     """Plays the next video in the queue."""
     try:
@@ -85,6 +106,7 @@ def play_next_video():
 
             audio_file = download_audio(next_video_id)
             add_to_vlc_queue(audio_file)
+            
         else:
             logging.info("Queue is empty. Waiting for new videos...")
     except Exception as e:
@@ -162,6 +184,9 @@ def on_chat_message(chat):
             video_queue.append(video_id)
             user_last_command[username] = current_time
             logging.info("%s added to queue: %s", username, video_id)
+            
+            if TOAST_NOTIFICATIONS:
+                show_toast(video_id, username)
 
             if len(video_queue) == 1:
                 play_next_video()
