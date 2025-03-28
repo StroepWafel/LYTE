@@ -69,9 +69,6 @@ The path to your local VLC install (including the .exe name)
 The path to your local ffmpeg install (including the .exe name)
 
 ### TOAST_NOTIFICATIONS
->[!CAUTION]
->The following setting is case sensitive, please make sure to use a capital "T" when writing "True"\
-
 Setting this to ```True``` (default) will enable toast notifications that pop up with the song name and requester, setting it to any other value will disable these notifications
 
 ### PREFIX
