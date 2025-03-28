@@ -9,8 +9,6 @@ YouTube Live Music (YTLM) is a bot that allows viewers of a live stream to use c
 - [Config Documentation](#config-documentation)
   - [YOUTUBE_VIDEO_ID](#youtube_video_id)
   - [RATE_LIMIT_SECONDS](#rate_limit_seconds)  
-  - [VLC_PATH](#vlc_path)  
-  - [FFMPEG_PATH](#ffmpeg_path)
   - [TOAST_NOTIFICATIONS](#toast_notifications)
   - [PREFIX](#prefix)  
   - [QUEUE_COMMAND](#queue_command)
@@ -37,13 +35,13 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 6. Open the file config.json in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
 7. Change `LIVESTREAM_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `/live/`)
 8. Change the value for `RATE_LIMIT_SECONDS`. This is how long users have to wait before they can request another song (in seconds)
-9. Run main.py in the src folder
-  - for windows:
-    - press Win+r to open the run dialogue
-    - type "cmd" and hit enter to open command prompt
-    - using command prompt, navigate to where you downloaded the files (using `cd <path to folder.`)
-    - navigate to the src folder: `cd YTLM-main/src`
-    - type `python main.py` and hit enter
+9. Run main.py in the src folder:\
+For windows:
+    - Press Win+r to open the run dialogue
+    - Type "cmd" and hit enter to open command prompt
+    - Using command prompt, navigate to where you downloaded the files (using `cd <path to folder.`)
+    - Navigate to the src folder: `cd YTLM-main/src`
+    - Type `python main.py` and hit enter
 
 ## Config Documentation
 
