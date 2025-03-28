@@ -6,7 +6,6 @@ viewers can use commands to queue music on the streamer's PC
 # screw you pylint
 # pylint: disable=W0718
 
-
 import time
 import json
 import os
@@ -49,7 +48,6 @@ logging.getLogger('httpx').setLevel(logging.ERROR)
 logging.getLogger('httpcore').setLevel(logging.ERROR)
 
 
-
 try:
     # Load configuration from config.json
     with open('config.json', 'r', encoding="utf-8") as f:
@@ -89,7 +87,7 @@ except Exception as e:
     sys.exit(1)
 
 def show_toast(video_id, username):
-    """Creates a toast notification about adding song to queue"""
+    """Creates a toast notification about adding a song to the queue."""
     notification.notify(
         title="Requested by: " + username,
         message="Adding '" + get_video_name(video_id) + "' to queue",
@@ -97,13 +95,14 @@ def show_toast(video_id, username):
     )
 
 def get_video_name(video_id):
-    """Gets name of video from youtube website,pretends to be a browser"""
+    """Gets the name of a YouTube video given its video ID."""
     url = f"https://www.youtube.com/watch?v={video_id}"
     headers = {"User-Agent": "Mozilla/5.0"}  # Mimic browser
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=10)
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+    except requests.RequestException as e:
+        logging.error("Error fetching video name: %s", e)
+        return "title unavailable"
 
     match = re.search(r'<title>(.*?)</title>', response.text)
     if match:
