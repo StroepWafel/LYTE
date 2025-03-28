@@ -35,8 +35,8 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 4. Install the required python libraries (found in Src/requirements.txt) using pip (normally included in Python)
 5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately. **MAKE SURE TO USE THE SAME ARCHITECTURE AS YOUR PYTHON INSTALL**
 6. Open the file config.json in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
-7. Change `LIVESTREAM\_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `/live/`)
-8. Change the value for `RATE\_LIMIT\_SECONDS`. This is how long users have to wait before they can request another song (in seconds)
+7. Change `LIVESTREAM_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `/live/`)
+8. Change the value for `RATE_LIMIT_SECONDS`. This is how long users have to wait before they can request another song (in seconds)
 9. Run main.py, and VLC will open.
 
 ## Config Documentation
