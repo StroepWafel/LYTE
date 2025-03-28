@@ -33,7 +33,7 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 2. Install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip`; this will both make sure pip is correctly installed and that it is up-to-date
 4. Install the required python libraries (found in Src/requirements.txt) using pip (normally included in Python)
-5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately.
+5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately. **MAKE SURE TO USE THE SAME ARCHITECTURE AS YOUR PYTHON INSTALL**
 6. Download the correct version for your OS, extract it and navigate to the bin folder
       - __Windows:__ [Windows FFmpeg](https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip)
       - __MacOS:__ [MacOS FFmpeg](https://evermeet.cx/ffmpeg/ffmpeg-7.1.1.zip"). Ignore the next step; put the default path into the JSON.
