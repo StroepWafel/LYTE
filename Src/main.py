@@ -2,6 +2,8 @@
 YTLM uses pytchat to fetch the chat of a youtube livestream so that the
 viewers can use commands to queue music on the streamer's PC
 """
+# screw you pylint
+# pylint: disable=W0718
 
 import time
 import json
