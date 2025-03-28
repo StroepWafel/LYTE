@@ -50,7 +50,7 @@ except Exception as e:
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
 RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 10)
-TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True")
+TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true"
 PREFIX = config.get('PREFIX', "!")
 QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
 BANNED_IDS = bannedIDs
@@ -130,7 +130,7 @@ def on_chat_message(chat):
                 return
 
             if username in BANNED_USERS:
-                logging.warning("%s tried to queue a song but are banned! Ignored.", username)
+                logging.warning("%s tried to queue a song but is banned! Ignored.", username)
                 return
 
             queue_song("https://www.youtube.com/watch?v=" + video_id)
