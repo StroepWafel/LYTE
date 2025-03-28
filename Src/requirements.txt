@@ -2,4 +2,4 @@ pytchat
 yt-dlp
 requests
 plyer
-pythin-vlc
+python-vlc
