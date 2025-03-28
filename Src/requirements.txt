@@ -2,3 +2,4 @@ pytchat
 yt-dlp
 requests
 plyer
+python-vlc
