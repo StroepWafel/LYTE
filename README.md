@@ -63,13 +63,13 @@ This configuration option allows you to set any string as the command for queuei
 ### banned_IDs.json
 this file is used to store all banned youtube video IDs, for the time being you will have to add them manually to the file, each video id should be in quotation marks and seperated by commas, for example:
 ```JSON
-["<Video ID 1>", "<Video ID 2>", "<Video ID 3>"]
+["Video ID 1", "Video ID 2", "Video ID 3"]
 ```
 
 ### banned_users.json
 this file is used to store all banned youtube user handles, for the time being you will have to add them manually to the file, each handle should be in quotation marks and seperated by commas, for example:
 ```JSON
-["<@Handle 1>", "<@Handle 2>", "<@Handle 3>"]
+["@Handle 1", "@Handle 2", "@Handle 3"]
 ```
 # Notes
 
