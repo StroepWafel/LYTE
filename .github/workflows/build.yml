@@ -1,9 +1,8 @@
 name: Build Workflow
 
 on:
-  push:
-    branches: 
-    - 'release/*'
+  release:
+    types: [published]
 
 jobs:
   build-windows:
