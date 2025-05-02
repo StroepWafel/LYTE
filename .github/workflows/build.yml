@@ -26,13 +26,6 @@ jobs:
       - name: Run PyInstaller
         run: |
           python -m PyInstaller main.spec
-          
-      - name: List dist contents
-        run: |
-          echo "Top-level dist:"
-          dir dist
-          echo "Contents of dist/YTLM (if exists):"
-          dir dist\YTLM || echo "dist/YTLM does not exist"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
