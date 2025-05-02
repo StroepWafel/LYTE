@@ -3,3 +3,4 @@ yt-dlp
 requests
 plyer
 python-vlc
+pyinstaller
