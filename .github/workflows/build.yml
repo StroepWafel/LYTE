@@ -2,6 +2,9 @@ name: Build Workflow
 
 on: workflow_dispatch
 
+permissions:
+  contents: write  # ✅ Required for release creation
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -30,21 +33,14 @@ jobs:
           name: Windows_YTLM
           path: dist/YTLM.exe
 
-      - name: Create Release
-        id: create_release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.run_number }}
+          tag_name: v${{ github.run_number }}  # ✅ Safer, unique
           name: Release ${{ github.run_number }}
           body: |
             Build Release
             This is an automated .exe release.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
-        with:
           files: dist/YTLM.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
