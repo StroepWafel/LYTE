@@ -10,6 +10,7 @@ import logging
 import sys
 import re
 import tkinter as tk
+from tkinter import Frame, Button, PhotoImage
 import threading
 from collections import defaultdict
 from datetime import datetime
@@ -19,10 +20,25 @@ import requests
 from plyer import notification
 import vlc  # Using python-vlc
 
-# Specify the folder to store logs
-LOG_FOLDER = 'logs'
+# Determine the base folder (works with PyInstaller onefile too)
+def get_app_folder():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
-# Ensure the log folder exists
+def resource_path(relative_path):
+    """ Get the absolute path to the resource, works for dev and bundled versions """
+    try:
+        # PyInstaller creates a temporary folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+APP_FOLDER = get_app_folder()
+
+# Specify the folder to store logs
+LOG_FOLDER = os.path.join(APP_FOLDER, 'logs')
 os.makedirs(LOG_FOLDER, exist_ok=True)
 
 # Set up logging system
@@ -38,13 +54,37 @@ logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger('httpx').setLevel(logging.ERROR)
 logging.getLogger('httpcore').setLevel(logging.ERROR)
 
+default_config = {
+    "YOUTUBE_VIDEO_ID": "LIVESTREAM_ID",
+    "RATE_LIMIT_SECONDS": 240,
+    "TOAST_NOTIFICATIONS": "True",
+    "PREFIX": "!",
+    "QUEUE_COMMAND": "queue"
+}
+default_banned_IDs = []
+default_banned_users = []
+
+def ensure_file_exists(filepath, default_content):
+    if not os.path.isfile(filepath):
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(default_content, f, indent=4)
+        logging.info(f"Created missing file: {filepath}")
+
+# Full paths to config files
+CONFIG_PATH = os.path.join(APP_FOLDER, 'config.json')
+BANNED_IDS_PATH = os.path.join(APP_FOLDER, 'banned_IDs.json')
+BANNED_USERS_PATH = os.path.join(APP_FOLDER, 'banned_users.json')
+
 try:
-    # Load configuration from config.json
-    with open('config.json', 'r', encoding="utf-8") as f:
+    ensure_file_exists(CONFIG_PATH, default_config)
+    ensure_file_exists(BANNED_IDS_PATH, default_banned_IDs)
+    ensure_file_exists(BANNED_USERS_PATH, default_banned_users)
+
+    with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
-    with open("banned_IDs.json", "r", encoding="utf-8") as f:
+    with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
         bannedIDs = json.load(f)
-    with open("banned_users.json", "r", encoding="utf-8") as f:
+    with open(BANNED_USERS_PATH, 'r', encoding="utf-8") as f:
         bannedUsers = json.load(f)
 except Exception as e:
     logging.critical("Error while loading files: %s", e)
@@ -69,7 +109,11 @@ player.play()
 logging.info("Started VLC...")
 
 # Set up chat listener
-chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
+try:
+    chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
+except Exception as e:
+    logging.critical("Error while listening to livestream chat: %s, Please fix the issue and try again", e)
+    sys.exit(1)
 
 # Gui Setup
 root = tk.Tk()
@@ -107,8 +151,29 @@ def previous_song():
     player.previous()
     update_now_playing()
 
-def refresh():
+def refresh_song():
     update_now_playing()
+    
+### In progress:
+"""def refresh_configs():
+    try:
+        with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
+            config = json.load(f)
+        with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
+            bannedIDs = json.load(f)
+        with open(BANNED_USERS_PATH, 'r', encoding="utf-8") as f:
+            bannedUsers = json.load(f)
+
+        YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
+        RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 10)
+        TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true"
+        PREFIX = config.get('PREFIX', "!")
+        QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
+        BANNED_IDS = bannedIDs
+        BANNED_USERS = bannedUsers
+    except Exception as e:
+        logging.critical("Error while refreshing files: %s", e)"""
+
 
 # end button functions
 
@@ -116,10 +181,51 @@ def refresh():
 control_frame = tk.Frame(root)
 control_frame.pack(pady=20)
 
-tk.Button(control_frame, text="Play/Pause", width=10, command=play_pause).grid(row=0, column=0, padx=5)
-tk.Button(control_frame, text="Next", width=10, command=next_song).grid(row=0, column=1, padx=5)
-tk.Button(control_frame, text="Previous", width=10, command=previous_song).grid(row=0, column=2, padx=5)
-tk.Button(control_frame, text="Refresh", width=10, command=refresh).grid(row=0, column=3, padx=5)
+play_icon = PhotoImage(file=resource_path("icons/play.png")).subsample(20, 20)
+next_icon = PhotoImage(file=resource_path("icons/next.png")).subsample(20, 20)
+prev_icon = PhotoImage(file=resource_path("icons/back.png")).subsample(20, 20)
+refresh_icon = PhotoImage(file=resource_path("icons/refresh.png")).subsample(20, 20)
+
+buttons_images = [play_icon, next_icon, prev_icon, refresh_icon]
+
+Button(control_frame, 
+       text="Play/Pause", 
+       image=play_icon, 
+       compound="left", 
+       command=play_pause, 
+       activebackground="lightblue", 
+       activeforeground="black").grid(row=0, column=0, padx=5)
+Button(control_frame, 
+       text="Next", 
+       image=next_icon, 
+       compound="left", 
+       command=next_song, 
+       activebackground="lightblue", 
+       activeforeground="black").grid(row=0, column=1, padx=5)
+Button(control_frame, 
+       text="Previous", 
+       image=prev_icon, 
+       compound="left", 
+       command=previous_song, 
+       activebackground="lightblue", 
+       activeforeground="black").grid(row=0, column=2, padx=5)
+Button(control_frame, 
+       text="Refresh Song", 
+       image=refresh_icon, 
+       compound="left", 
+       command=refresh_song, 
+       activebackground="lightblue", 
+       activeforeground="black").grid(row=0, column=3, padx=5)
+
+### In progress:
+"""Button(control_frame, 
+       text="Refresh Config", 
+       image=refresh_icon, 
+       compound="left", 
+       command=refresh_configs, 
+       activebackground="lightblue", 
+       activeforeground="black").grid(row=0, column=4, padx=5)"""
+
 
 def show_toast(video_id, username):
     notification.notify(
