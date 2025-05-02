@@ -9,6 +9,8 @@ import os
 import logging
 import sys
 import re
+import tkinter as tk
+import threading
 from collections import defaultdict
 from datetime import datetime
 import pytchat
@@ -66,12 +68,74 @@ player.set_media_list(media_list)
 player.play()
 logging.info("Started VLC...")
 
+# Set up chat listener
+chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
+
+# Gui Setup
+root = tk.Tk()
+root.title("YTLM Control Panel")
+
+now_playing_label = tk.Label(root, text="Now Playing: Nothing", font=("Arial", 14))
+now_playing_label.pack(pady=10)
+
+# Button Functions
+def update_now_playing():
+    media = player.get_media_player().get_media()
+    if media:
+        media.parse_with_options(vlc.MediaParseFlag.local, timeout=1000)
+        
+        # Fetch the title metadata directly from VLC
+        name = media.get_meta(vlc.Meta.Title)
+
+        # Fallback to the YouTube title if VLC's title metadata isn't available
+        if not name:
+            youtube_url = media.get_mrl()  # Get the MRL (Media Resource Locator) URL (YouTube URL)
+            name = get_video_title(youtube_url)  # Fetch title from YouTube if VLC fails
+
+        now_playing_label.config(text=f"Now Playing: {name}")
+    else:
+        now_playing_label.config(text="Now Playing: Nothing")
+
+def play_pause():
+    player.pause()  # note: toggles pause/play
+
+def next_song():
+    player.next()
+    update_now_playing()
+
+def previous_song():
+    player.previous()
+    update_now_playing()
+
+def refresh():
+    update_now_playing()
+
+# end button functions
+
+# --- Buttons ---
+control_frame = tk.Frame(root)
+control_frame.pack(pady=20)
+
+tk.Button(control_frame, text="Play/Pause", width=10, command=play_pause).grid(row=0, column=0, padx=5)
+tk.Button(control_frame, text="Next", width=10, command=next_song).grid(row=0, column=1, padx=5)
+tk.Button(control_frame, text="Previous", width=10, command=previous_song).grid(row=0, column=2, padx=5)
+tk.Button(control_frame, text="Refresh", width=10, command=refresh).grid(row=0, column=3, padx=5)
+
 def show_toast(video_id, username):
     notification.notify(
         title="Requested by: " + username,
         message="Adding '" + get_video_name(video_id) + "' to queue",
         timeout=5  # Notification disappears after 5 seconds
     )
+    
+def get_video_title(youtube_url):
+    ydl_opts = {
+        'quiet': True,  # Suppress output
+        'extract_flat': True,  # Only fetch metadata
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(youtube_url, download=False)
+        return info['title']
 
 def get_video_name(video_id):
     url = f"https://www.youtube.com/watch?v={video_id}"
@@ -91,10 +155,15 @@ def get_direct_url(youtube_url):
     
 def queue_song(youtube_url):
     try:
-        direct_url = get_direct_url(youtube_url)
+        direct_url = get_direct_url(youtube_url)  # Fetch the playable URL
         media = instance.media_new(direct_url)
+        
+        # Fetch the YouTube video title
+        title = get_video_title(youtube_url)  # Use yt_dlp to get title
+        media.set_meta(vlc.Meta.Title, title)  # Set VLC's title metadata
+
         media_list.add_media(media)
-        logging.info(f"Queued: {youtube_url}")
+        logging.info(f"Queued: {youtube_url} as {title}")
         
         # Make sure VLC starts playing the media immediately after queuing
         if player.get_state() != vlc.State.Playing:
@@ -104,7 +173,6 @@ def queue_song(youtube_url):
             logging.info("Player is already playing.")
     except Exception as e:
         logging.error(f"Error getting URL for {youtube_url}: {e}")
-
 
 
 def on_chat_message(chat):
@@ -134,6 +202,7 @@ def on_chat_message(chat):
                 return
 
             queue_song("https://www.youtube.com/watch?v=" + video_id)
+            update_now_playing()
 
             user_last_command[username] = current_time
             logging.info("%s added to queue: %s", username, video_id)
@@ -145,28 +214,27 @@ def on_chat_message(chat):
     except Exception as e:
         logging.error("Unexpected error processing chat message: %s", e)
 
-def start_chat_listener():
-    """Start listening to YouTube chat."""
-    try:
-        logging.info("Listening to YouTube Live Chat...")
-        chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
-        while chat.is_alive():
-            for message in chat.get().sync_items():
-                on_chat_message(message)
+def poll_chat():
+    if chat.is_alive():
+        for message in chat.get().sync_items():
+            on_chat_message(message)
+    root.after(1000, poll_chat)  # poll every 1s
+
+
+def vlc_loop():
+    # Keep script running while VLC plays, even after playback ends
+    while True:
+        # Check if VLC player has ended but prevent script from closing
+        if player.get_state() == vlc.State.Ended:
+            logging.info("Playback finished. Waiting for new songs...")
+            if media_list.count() > 0:
+                # Ensure the player continues to play the next song
+                player.play()
+            # If there are no more songs, keep waiting for input
             time.sleep(1)
-    except Exception as e:
-        logging.critical("An unexpected error occurred in chat listener: %s", e)
-        sys.exit(1)
 
-start_chat_listener()
+threading.Thread(target=vlc_loop, daemon=True).start()
 
-# Keep script running while VLC plays, even after playback ends
-while True:
-    # Check if VLC player has ended but prevent script from closing
-    if player.get_state() == vlc.State.Ended:
-        logging.info("Playback finished. Waiting for new songs...")
-        if media_list.count() > 0:
-            # Ensure the player continues to play the next song
-            player.play()
-        # If there are no more songs, keep waiting for input
-        time.sleep(1)
+poll_chat()
+root.mainloop()
+
