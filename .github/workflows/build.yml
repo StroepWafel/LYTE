@@ -7,45 +7,44 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
+
       - name: Install Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           architecture: 'x64'
+
       - name: Install requirements
         run: |
           python -m pip install --upgrade pip
           pip install -r Src/requirements.txt
+
       - name: Run PyInstaller
         run: |
           python -m PyInstaller main.spec
-      - uses: actions/upload-artifact@v2
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
           name: Windows_YTLM
           path: dist/YTLM.exe
 
-      - name: create release
+      - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.head_commit.message }}
-          release_name: ${{ github.event.head_commit.message }}
-          overwrite: true
+          tag_name: ${{ github.run_number }}
+          name: Release ${{ github.run_number }}
           body: |
             Build Release
-            This is an automated .exe release
-          draft: false
-          prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+            This is an automated .exe release.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{steps.create_release.outputs.upload_url}}
-          asset_path: dist/YTLM.exe
-          asset_name: YTLM.exe
-          asset_content_type: application/zip
+          files: dist/YTLM.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
