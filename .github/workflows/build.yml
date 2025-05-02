@@ -31,16 +31,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Windows_YTLM
-          path: dist/YTLM.exe
+          path: dist/YTLM/YTLM.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ github.run_number }}  # ✅ Safer, unique
+          tag_name: v${{ github.run_number }}
           name: Release ${{ github.run_number }}
           body: |
             Build Release
             This is an automated .exe release.
-          files: dist/YTLM.exe
+          files: dist/YTLM/YTLM.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
