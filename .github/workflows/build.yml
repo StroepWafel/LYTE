@@ -26,12 +26,19 @@ jobs:
       - name: Run PyInstaller
         run: |
           python -m PyInstaller main.spec
+          
+      - name: List dist contents
+        run: |
+          echo "Top-level dist:"
+          dir dist
+          echo "Contents of dist/YTLM (if exists):"
+          dir dist\YTLM || echo "dist/YTLM does not exist"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: Windows_YTLM
-          path: dist/YTLM/YTLM.exe
+          path: dist/YTLM.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -41,7 +48,7 @@ jobs:
           body: |
             Build Release
             This is an automated .exe release.
-          files: dist/YTLM/YTLM.exe
+          files: dist/YTLM.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
