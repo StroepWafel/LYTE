@@ -7,15 +7,14 @@ added_files = [
          ]
 a = Analysis(
     ['src\\main.py'],
+    pathex=[],
+    binaries=[],
+    datas=added_files,
     hiddenimports=[
     'plyer.platforms.win.notification',
     'plyer.platforms.linux.notification',
     'plyer.platforms.darwin.notification'
     ],
-    pathex=[],
-    binaries=[],
-    datas=added_files,
-    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
