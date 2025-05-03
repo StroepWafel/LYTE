@@ -64,11 +64,16 @@ default_config = {
 default_banned_IDs = []
 default_banned_users = []
 
+wasMissingAConfig = False
+
 def ensure_file_exists(filepath, default_content):
+    global wasMissingAConfig
     if not os.path.isfile(filepath):
+        wasMissingAConfig = True
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(default_content, f, indent=4)
         logging.info(f"Created missing file: {filepath}")
+
 
 # Full paths to config files
 CONFIG_PATH = os.path.join(APP_FOLDER, 'config.json')
@@ -79,6 +84,10 @@ try:
     ensure_file_exists(CONFIG_PATH, default_config)
     ensure_file_exists(BANNED_IDS_PATH, default_banned_IDs)
     ensure_file_exists(BANNED_USERS_PATH, default_banned_users)
+
+    if wasMissingAConfig:
+        logging.critical("One or more config files were created, please make any necessary changes to the file and restart")
+        sys.exit(1)
 
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
