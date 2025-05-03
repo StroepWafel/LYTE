@@ -43,7 +43,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
-          name: Release number ${{ github.run_number }}
+          name: Release ${{ github.run_number }}
           body: ${{ github.event.inputs.description }}
           files: dist/YTLM.exe
         env:
