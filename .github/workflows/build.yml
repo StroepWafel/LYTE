@@ -1,6 +1,12 @@
 name: Build Workflow
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      description:
+        description: 'Description of the release'
+        required: true
+        type: string
 
 permissions:
   contents: write  # ✅ Required for release creation
@@ -37,11 +43,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.run_number }}
-          name: Release ${{ github.run_number }}
-          body: |
-            Build Release
-            This is an automated .exe release.
+          name: Release number ${{ github.run_number }}
+          body: ${{ github.event.inputs.description }}
           files: dist/YTLM.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
