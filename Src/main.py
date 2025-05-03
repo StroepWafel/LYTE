@@ -10,7 +10,7 @@ import logging
 import sys
 import re
 import tkinter as tk
-from tkinter import Frame, Button, PhotoImage
+from tkinter import Button, PhotoImage
 import threading
 from collections import defaultdict
 from datetime import datetime
@@ -196,19 +196,19 @@ Button(control_frame,
        activebackground="lightblue", 
        activeforeground="black").grid(row=0, column=0, padx=5)
 Button(control_frame, 
-       text="Next", 
-       image=next_icon, 
-       compound="left", 
-       command=next_song, 
-       activebackground="lightblue", 
-       activeforeground="black").grid(row=0, column=1, padx=5)
-Button(control_frame, 
        text="Previous", 
        image=prev_icon, 
        compound="left", 
        command=previous_song, 
        activebackground="lightblue", 
        activeforeground="black").grid(row=0, column=2, padx=5)
+Button(control_frame, 
+       text="Next", 
+       image=next_icon, 
+       compound="left", 
+       command=next_song, 
+       activebackground="lightblue", 
+       activeforeground="black").grid(row=0, column=1, padx=5)
 Button(control_frame, 
        text="Refresh Song", 
        image=refresh_icon, 
