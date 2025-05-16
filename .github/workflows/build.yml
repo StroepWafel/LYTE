@@ -2,16 +2,7 @@ name: Build Workflow
 
 on:
   workflow_dispatch:
-    inputs:
-      description:
-        description: 'Description of the release'
-        required: true
-        type: string
-      create_release:
-        description: 'Create release once built'
-        required: true
-        default: false
-        type: boolean
+
 
 permissions:
   contents: write
@@ -43,14 +34,3 @@ jobs:
         with:
           name: Windows_YTLM
           path: dist/YTLM.exe
-
-      - name: Create GitHub Release
-        if: ${{ inputs.create_release == 'true' }}
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.run_number }}
-          name: Release ${{ github.run_number }}
-          body: ${{ github.event.inputs.description }}
-          files: dist/YTLM.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
