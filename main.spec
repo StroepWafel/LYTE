@@ -1,10 +1,19 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+import os
+import nicegui
+from PyInstaller.utils.hooks import collect_data_files
+
 # Required files (manually added)
 added_files = [
     ('src/icons/', 'icons'),
 ]
 
+# Dynamically include the NiceGUI static files
+nicegui_files = collect_data_files('nicegui', includes=['static/*'])
+
 # Combine all data files
-datas = added_files
+datas = added_files + nicegui_files
 
 a = Analysis(
     ['src\\main.py'],
