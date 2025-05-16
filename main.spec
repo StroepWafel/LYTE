@@ -10,8 +10,7 @@ added_files = [
 ]
 
 # Dynamically include the NiceGUI static files
-nicegui_static_path = os.path.join(os.path.dirname(nicegui.__file__), 'static')
-nicegui_files = collect_data_files('nicegui', includes=['static/*'])]
+nicegui_files = collect_data_files('nicegui', includes=['static/*'])
 
 # Combine all data files
 datas = added_files + nicegui_files
