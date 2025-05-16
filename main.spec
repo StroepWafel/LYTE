@@ -14,10 +14,13 @@ added_files = [
 # Dynamically include the NiceGUI static files
 nicegui_files = collect_data_files('nicegui', include_py_files=True)
 
-# Binary C extensions for orjson and pydantic_core
+# Locate binary extensions correctly
+orjson_pyd = os.path.join(os.path.dirname(orjson.__file__), 'orjson.pyd')
+pydantic_core_pyd = os.path.join(os.path.dirname(pydantic_core.__file__), '_pydantic_core.pyd')
+
 binaries = [
-    (orjson.__file__.replace('__init__.py', 'orjson.pyd'), 'orjson'),
-    (pydantic_core.__file__.replace('__init__.py', '_pydantic_core.pyd'), 'pydantic_core'),
+    (orjson_pyd, 'orjson'),
+    (pydantic_core_pyd, 'pydantic_core'),
 ]
 
 # Combine all data files
