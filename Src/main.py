@@ -1,5 +1,5 @@
 # Replaces the Tkinter GUI with NiceGUI
-from nicegui import ui
+import subprocess
 import time
 import json
 import os
@@ -27,6 +27,18 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+def install_package(package):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+try:
+    import nicegui
+except ImportError:
+    print("NiceGUI not found, installing it now...")
+    install_package("nicegui")
+    import nicegui  # try again after install
+
+from nicegui import ui
 
 APP_FOLDER = get_app_folder()
 LOG_FOLDER = os.path.join(APP_FOLDER, 'logs')
