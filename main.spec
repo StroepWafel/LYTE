@@ -1,16 +1,31 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+import nicegui
+from PyInstaller.utils.hooks import collect_data_files
 
+# Required files (manually added)
 added_files = [
-         ( 'src/icons/', 'icons' ),
-         
-         ]
+    ('src/icons/', 'icons'),
+]
+
+# Dynamically include the NiceGUI static files
+nicegui_static_path = os.path.join(os.path.dirname(nicegui.__file__), 'static')
+nicegui_files = collect_data_files('nicegui', includes=['static/*'])]
+
+# Combine all data files
+datas = added_files + nicegui_files
+
 a = Analysis(
     ['src\\main.py'],
     pathex=[],
     binaries=[],
-    datas=added_files,
-    hiddenimports=[],
+    datas=datas,
+    hiddenimports=[
+        'plyer.platforms.win.notification',
+        'plyer.platforms.linux.notification',
+        'plyer.platforms.darwin.notification'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -18,6 +33,7 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -39,5 +55,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-	icon='app.ico'
+    icon='app.ico'
 )
