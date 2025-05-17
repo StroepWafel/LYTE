@@ -1,29 +1,21 @@
-# -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
-
+# Required files (manually added)
 added_files = [
     ('src/icons/', 'icons'),
 ]
 
-nicegui_files = collect_data_files('nicegui', include_py_files=True)
-orjson_binaries = collect_dynamic_libs('orjson')
-pydantic_core_binaries = collect_dynamic_libs('pydantic_core')
-
-binaries = orjson_binaries + pydantic_core_binaries
-datas = added_files + nicegui_files
-
-hiddenimports = collect_submodules('pydantic_core') + collect_submodules('orjson') + [
-    'plyer.platforms.win.notification',
-    'plyer.platforms.linux.notification',
-    'plyer.platforms.darwin.notification',
-]
+# Combine all data files
+datas = added_files
 
 a = Analysis(
     ['src\\main.py'],
     pathex=[],
-    binaries=binaries,
+    binaries=[],
     datas=datas,
-    hiddenimports=hiddenimports,
+    hiddenimports=[
+        'plyer.platforms.win.notification',
+        'plyer.platforms.linux.notification',
+        'plyer.platforms.darwin.notification'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -50,5 +42,8 @@ exe = EXE(
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
     icon='app.ico'
 )
