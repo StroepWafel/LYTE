@@ -15,8 +15,8 @@ added_files = [
 nicegui_files = collect_data_files('nicegui', include_py_files=True)
 
 # Locate binary extensions correctly
-orjson_pyd = os.path.join(os.path.dirname(orjson.__file__), 'orjson.pyd')
-pydantic_core_pyd = os.path.join(os.path.dirname(pydantic_core.__file__), '_pydantic_core.pyd')
+orjson_pyd = collect_data_files('orjson', include_py_files=True)
+pydantic_core_pyd = collect_data_files('pydantic_core', include_py_files=True)
 
 binaries = [
     (orjson_pyd, 'orjson'),
