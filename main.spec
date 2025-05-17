@@ -17,7 +17,7 @@ datas += added_files
 a = Analysis(
     ['src\\main.py'],
     pathex=['src'],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=[
         'plyer.platforms.win.notification',
