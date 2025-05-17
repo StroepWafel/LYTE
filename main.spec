@@ -1,14 +1,17 @@
+from PyInstaller.utils.hooks import collect_data_files
+
 # Required files (manually added)
 added_files = [
     ('src/icons/', 'icons'),
 ]
 
-# Combine all data files
-datas = added_files
+# Collect nicegui data files automatically (alternative)
+datas = collect_data_files('nicegui')
+datas += added_files
 
 a = Analysis(
     ['src\\main.py'],
-    pathex=[],
+    pathex=['src'],
     binaries=[],
     datas=datas,
     hiddenimports=[
