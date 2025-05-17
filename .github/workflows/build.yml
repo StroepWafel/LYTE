@@ -26,7 +26,7 @@ jobs:
 
       - name: Run PyInstaller
         run: |
-          python -m PyInstaller main.spec
+          python -m PyInstaller --clean main.spec
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
