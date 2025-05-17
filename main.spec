@@ -1,41 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
-import os
-import nicegui
-import orjson
-import pydantic_core
-from PyInstaller.utils.hooks import collect_data_files
-
-# Required files (manually added)
 added_files = [
     ('src/icons/', 'icons'),
 ]
 
-# Get nicegui files
 nicegui_files = collect_data_files('nicegui', include_py_files=True)
+orjson_binaries = collect_dynamic_libs('orjson')
+pydantic_core_binaries = collect_dynamic_libs('pydantic_core')
 
-# Collect binaries
-orjson_binaries = collect_data_files('orjson', include_py_files=True)
-pydantic_core_binaries = collect_data_files('pydantic_core', include_py_files=True)
-
-# Combine binaries, no flattening needed
 binaries = orjson_binaries + pydantic_core_binaries
-
-# Combine datas
 datas = added_files + nicegui_files
+
+hiddenimports = collect_submodules('pydantic_core') + collect_submodules('orjson') + [
+    'plyer.platforms.win.notification',
+    'plyer.platforms.linux.notification',
+    'plyer.platforms.darwin.notification',
+]
 
 a = Analysis(
     ['src\\main.py'],
     pathex=[],
     binaries=binaries,
     datas=datas,
-    hiddenimports=[
-        'plyer.platforms.win.notification',
-        'plyer.platforms.linux.notification',
-        'plyer.platforms.darwin.notification',
-        'orjson.orjson',
-        'pydantic_core._pydantic_core',
-    ],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -62,8 +50,5 @@ exe = EXE(
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
     icon='app.ico'
 )
