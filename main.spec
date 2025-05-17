@@ -18,10 +18,18 @@ nicegui_files = collect_data_files('nicegui', include_py_files=True)
 orjson_pyd = collect_data_files('orjson', include_py_files=True)
 pydantic_core_pyd = collect_data_files('pydantic_core', include_py_files=True)
 
-# Flatten the collected binary files lists into a single list of tuples
-binaries = []
-binaries += orjson_pyd
-binaries += pydantic_core_pyd
+def flatten_binaries(files):
+    flat = []
+    for src, dest in files:
+        if isinstance(src, list):
+            for s in src:
+                flat.append((s, dest))
+        else:
+            flat.append((src, dest))
+    return flat
+
+binaries = flatten_binaries(orjson_pyd) + flatten_binaries(pydantic_core_pyd)
+
 
 # Combine all data files
 datas = added_files + nicegui_files
