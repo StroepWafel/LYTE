@@ -1,4 +1,3 @@
-# Replaces the Tkinter GUI with NiceGUI
 from nicegui import ui
 import time
 import json
