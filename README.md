@@ -28,12 +28,12 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 
 ## Setup
 
-### EXE installation:
-1. Download and extract the [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release)'s .exe file to any folder on your computer (this is because the .exe will create files upon execution)
-2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
-3. Check whether pip was added to Path correctly by running `pip install --upgrade pip` in terminal; this will both make sure pip is correctly installed and that it is up-to-date
-4. Run `pip install nicegui` in terminal to install required dependencies
-5. Run the `YTLM.exe` file located in whatever folder you saved the release to.
+### EXE installation (Currently not working):
+1. ~Download and extract the [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release)'s .exe file to any folder on your computer (this is because the .exe will create files upon execution)~
+2. ~If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked~
+3. ~Check whether pip was added to Path correctly by running `pip install --upgrade pip` in terminal; this will both make sure pip is correctly installed and that it is up-to-date~
+4. ~Run `pip install nicegui` in terminal to install required dependencies~
+5. ~Run the `YTLM.exe` file located in whatever folder you saved the release to.~
 
 ### python installation:
 1. Download and extract the source to any folder on your computer (clone repo or download [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release) source code)
