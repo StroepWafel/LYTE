@@ -1,4 +1,9 @@
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
+
+# Collect compiled binaries for orjson and pydantic_core
+binaries = collect_dynamic_libs('orjson') + collect_dynamic_libs('pydantic_core')
+
+datas = collect_data_files('orjson') + collect_data_files('pydantic_core')
 
 # Required files (manually added)
 added_files = [
@@ -17,7 +22,9 @@ a = Analysis(
     hiddenimports=[
         'plyer.platforms.win.notification',
         'plyer.platforms.linux.notification',
-        'plyer.platforms.darwin.notification'
+        'plyer.platforms.darwin.notification',
+        'orjson',
+        'pydantic_core'
     ],
     hookspath=[],
     hooksconfig={},
