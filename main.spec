@@ -11,27 +11,17 @@ added_files = [
     ('src/icons/', 'icons'),
 ]
 
-# Dynamically include the NiceGUI static files
+# Get nicegui files
 nicegui_files = collect_data_files('nicegui', include_py_files=True)
 
-# Locate binary extensions correctly
-orjson_pyd = collect_data_files('orjson', include_py_files=True)
-pydantic_core_pyd = collect_data_files('pydantic_core', include_py_files=True)
+# Collect binaries
+orjson_binaries = collect_data_files('orjson', include_py_files=True)
+pydantic_core_binaries = collect_data_files('pydantic_core', include_py_files=True)
 
-def flatten_binaries(files):
-    flat = []
-    for src, dest in files:
-        if isinstance(src, list):
-            for s in src:
-                flat.append((s, dest))
-        else:
-            flat.append((src, dest))
-    return flat
+# Combine binaries, no flattening needed
+binaries = orjson_binaries + pydantic_core_binaries
 
-binaries = flatten_binaries(orjson_pyd) + flatten_binaries(pydantic_core_pyd)
-
-
-# Combine all data files
+# Combine datas
 datas = added_files + nicegui_files
 
 a = Analysis(
