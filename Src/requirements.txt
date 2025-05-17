@@ -7,4 +7,3 @@ pyinstaller
 orjson
 pydantic
 nicegui
-nicegui-pack
