@@ -55,12 +55,12 @@ jobs:
         with:
           name: Windows_YTLM
           path: dist/YTLM.exe
-      - name: Format release notes with newlines
+      - name: Format release notes
         id: format_notes
+        shell: pwsh
         run: |
-          echo "formatted_release_notes<<EOF" >> $GITHUB_OUTPUT
-          echo -e "${{ github.event.inputs.release_notes }}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          $notes = "${{ github.event.inputs.release_notes }}" -replace "\\n", "`n"
+          "formatted_release_notes<<EOF`n$notes`nEOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -69,7 +69,7 @@ jobs:
           body: |
             What's New:
 
-            ${{ github.event.inputs.release_notes }}
+            ${{ steps.format_notes.outputs.formatted_release_notes }}
           files: dist/YTLM.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
