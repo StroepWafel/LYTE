@@ -3,13 +3,30 @@ name: Release Workflow
 on:
   workflow_dispatch:
     inputs:
-      description:
-        description: 'Description of the release'
+      release_channel:
+        description: 'Type of release'
+        required: true
+        type: choice
+        options:
+        - Alpha
+        - Dev
+        - Patch
+        - Full
+      release_version:
+        description: 'Version of release (e.g. 1.0.3)'
+        required: true
+        type: string
+      release_summary:
+        description: 'Quick summary of release to append to title'
+        required: true
+        type: string
+      release_notes:
+        description: 'What was added in the release (Markdown, use \\n for new lines)'
         required: true
         type: string
 
 permissions:
-  contents: write  # ✅ Required for release creation
+  contents: write
 
 jobs:
   build-windows:
@@ -42,9 +59,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ github.run_number }}
-          name: Release ${{ github.run_number }}
-          body: ${{ github.event.inputs.description }}
+          tag_name: ${{ github.event.inputs.release_channel }}-${{ github.event.inputs.release_version }}
+          name: "${{ github.event.inputs.release_channel }} Release v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
+          body: |
+            What's New:
+
+            ${{ github.event.inputs.release_notes }}
           files: dist/YTLM.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
