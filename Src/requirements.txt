@@ -4,3 +4,4 @@ requests
 plyer
 python-vlc
 pyinstaller
+dearpygui
