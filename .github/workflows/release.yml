@@ -11,7 +11,7 @@ on:
         - Alpha
         - Dev
         - Patch
-        - Full
+        - release
       release_version:
         description: 'Version of release (e.g. 1.0.3)'
         required: true
