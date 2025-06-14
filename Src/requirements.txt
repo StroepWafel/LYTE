@@ -4,6 +4,3 @@ requests
 plyer
 python-vlc
 pyinstaller
-orjson
-pydantic
-nicegui
