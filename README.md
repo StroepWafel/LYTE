@@ -33,6 +33,8 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip` in terminal; this will both make sure pip is correctly installed and that it is up-to-date
 4. Run the `YTLM.exe` file located in whatever folder you saved the release to.
+> [!IMPORTANT]  
+> If you are using windows, a popup may appear stating that "Windows Protected Your PC." if you trust this program, click "More info" then "Run anyway"
 5. Open the file config.json in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
 6. Change `LIVESTREAM_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `/live/`)
 7. *OPTIONAL*: change the other configs, documentation can be found in [Config Documentation](#config-documentation)
