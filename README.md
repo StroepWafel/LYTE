@@ -1,6 +1,6 @@
-![YTLM](https://socialify.git.ci/NIDNHU/YTLM/image?description=1&font=Source+Code+Pro&forks=1&issues=1&language=1&name=1&owner=1&pattern=Solid&pulls=1&stargazers=1&theme=Dark)
-# YTLM
-YouTube Live Music (YTLM) is a bot that allows viewers of a live stream to use commands to queue music
+![LYTE](https://socialify.git.ci/NIDNHU/YTLM/image?description=1&font=Source+Code+Pro&forks=1&issues=1&language=1&name=1&owner=1&pattern=Solid&pulls=1&stargazers=1&theme=Dark)
+# LYTE
+YouTube Live Music (LYTE) is a bot that allows viewers of a live stream to use commands to queue music
 
 # Contents:
 
@@ -32,7 +32,7 @@ The default command to queue a song is "!queue \<VIDEO\_URL>" where \<VIDEO\_URL
 1. Download and extract the [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release)'s .exe file to any folder on your computer (this is because the .exe will create files upon execution)
 2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip` in terminal; this will both make sure pip is correctly installed and that it is up-to-date
-4. Run the `YTLM.exe` file located in whatever folder you saved the release to.
+4. Run the `LYTE.exe` file located in whatever folder you saved the release to.
 > [!IMPORTANT]  
 > If you are using windows, a popup may appear stating that "Windows Protected Your PC." if you trust this program, click "More info" then "Run anyway"
 5. Open the file config.json in your text editor of choice, I recommend [VSCode](https://code.visualstudio.com/download) or [Notepad++](https://notepad-plus-plus.org/downloads/v8.6.7/)
