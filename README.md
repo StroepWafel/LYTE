@@ -1,6 +1,6 @@
 ![LYTE](https://socialify.git.ci/NIDNHU/YTLM/image?description=1&font=Source+Code+Pro&forks=1&issues=1&language=1&name=1&owner=1&pattern=Solid&pulls=1&stargazers=1&theme=Dark)
 # LYTE
-YouTube Live Music (LYTE) is a bot that allows viewers of a live stream to use commands to queue music
+Live YouTube Entertainment (LYTE) is a program that allows viewers of a live stream to use commands to queue music
 
 # Contents:
 
