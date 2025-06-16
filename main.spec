@@ -30,7 +30,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='YTLM',
+    name='LYTE',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
