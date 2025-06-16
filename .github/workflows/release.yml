@@ -53,8 +53,8 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Windows_YTLM
-          path: dist/YTLM.exe
+          name: Windows_LYTE_Build
+          path: dist/LYTE.exe
       - name: Format release notes
         id: format_notes
         shell: pwsh
