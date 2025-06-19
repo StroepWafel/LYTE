@@ -7,6 +7,7 @@ import re
 import threading
 from collections import defaultdict
 from datetime import datetime
+from time import time as current_time
 import pytchat
 import yt_dlp
 import requests
@@ -42,7 +43,15 @@ logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger('httpx').setLevel(logging.ERROR)
 logging.getLogger('httpcore').setLevel(logging.ERROR)
 
-# ---------------------- Configuration ----------------------
+is_user_dragging_slider = False
+last_slider_value = 0.0
+
+last_user_seek_time = 0
+last_gui_update_time = 0
+
+should_exit = False
+
+# ---------------------- Setup/Import Configuration ----------------------
 
 def ensure_file_exists(filepath, default_content):
     if not os.path.isfile(filepath):
@@ -97,14 +106,72 @@ except Exception as e:
     logging.critical("Error while listening to livestream chat: %s", e)
     sys.exit(1)
 
-# ---------------------- Helper Functions ----------------------
+# ---------------------- Functions ----------------------
 
-def load_texture_from_file(file_path, tag):
-    image = Image.open(file_path).convert("RGBA")
-    width, height = image.size
-    data = image.tobytes()
-    add_texture_registry()
-    add_static_texture(width, height, data, tag=tag)
+def quit_program():
+    global should_exit
+    should_exit = True
+    
+    logging.info("Shutting down program")
+
+    try:
+        player.stop()
+        media_player = player.get_media_player()
+        if media_player:
+            media_player.release()
+        player.release()
+        media_list.release()
+        instance.release()
+        logging.info("VLC stopped and resources released.")
+    except Exception as e:
+        logging.error(f"Error releasing VLC resources: {e}")
+
+    stop_dearpygui()
+    sys.exit(0)
+
+def format_time(seconds):
+    minutes = int(seconds // 60)
+    seconds = int(seconds % 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+def get_curr_songtime():
+    media_player = player.get_media_player()
+    if media_player is None:
+        logging.warning("No media player found.")
+        return
+
+    current_time_ms = media_player.get_time()
+
+    if current_time_ms < 0:
+        return
+    
+    current_time_sec = current_time_ms / 1000
+    return current_time_sec
+
+def on_song_slider_change(sender, app_data, user_data):
+    global last_user_seek_time
+    length = get_song_length()
+    if length:
+        new_time_ms = int(app_data * length * 1000)
+        player.get_media_player().set_time(new_time_ms)
+        last_user_seek_time = current_time()
+
+def get_song_length():
+    media_player = player.get_media_player()
+    if media_player is None:
+        logging.warning("No media player found.")
+        return
+    length_ms = media_player.get_length()
+    
+    if length_ms <= 0:
+        return
+    
+    length_sec = length_ms / 1000
+    return length_sec
+
+def on_volume_change(sender, app_data, user_data):
+    volume = int(app_data)  # VLC expects volume 0–100
+    player.get_media_player().audio_set_volume(volume)
 
 def show_toast(video_id, username):
     notification.notify(
@@ -133,14 +200,14 @@ def get_direct_url(youtube_url):
         info = ydl.extract_info(youtube_url, download=False)
         return info['url']
 
-def queue_song(youtube_url):
+def queue_song(youtube_url, requester):
     try:
         direct_url = get_direct_url(youtube_url)
         media = instance.media_new(direct_url)
         title = get_video_title(youtube_url)
         media.set_meta(vlc.Meta.Title, title)
         media_list.add_media(media)
-        logging.info(f"Queued: {youtube_url} as {title}")
+        logging.info(f"Queued: {youtube_url} as {title}. Requested by {requester}")
         if player.get_state() != vlc.State.Playing:
             player.play()
     except Exception as e:
@@ -160,19 +227,14 @@ def on_chat_message(chat_message):
                 return
             if video_id in BANNED_IDS or username in BANNED_USERS:
                 return
-            queue_song("https://www.youtube.com/watch?v=" + video_id)
+            queue_song("https://www.youtube.com/watch?v=" + video_id, username)
             update_now_playing()
             user_last_command[username] = current_time
             if TOAST_NOTIFICATIONS:
                 show_toast(video_id, username)
     except Exception as e:
         logging.error("Chat message error: %s", e)
-
-# ---------------------- GUI ----------------------
-
-create_context()
-now_playing_text = None
-
+    
 def update_now_playing():
     media = player.get_media_player().get_media()
     if media:
@@ -185,47 +247,153 @@ def update_now_playing():
     else:
         set_value(now_playing_text, "Now Playing: Nothing")
 
+
+# ---------------------- GUI ----------------------
+create_context()
+now_playing_text = None
+song_slider_tag = "song_slider"
+ignore_slider_callback = False
+
+dark_mode = True
+dark_theme = None
+light_theme = None
+
+def create_dark_theme():
+    with theme(tag="dark_theme"):
+        with theme_component(mvAll):
+            add_theme_color(mvThemeCol_WindowBg, (30, 30, 30, 255))
+            add_theme_color(mvThemeCol_FrameBg, (50, 50, 50, 255))
+            add_theme_color(mvThemeCol_Button, (70, 70, 70, 255))
+            add_theme_color(mvThemeCol_ButtonHovered, (100, 100, 100, 255))
+            add_theme_color(mvThemeCol_ButtonActive, (120, 120, 120, 255))
+            add_theme_color(mvThemeCol_Text, (220, 220, 220, 255))
+            add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
+
+def create_light_theme():
+    with theme(tag="light_theme"):
+        with theme_component(mvAll):
+            add_theme_color(mvThemeCol_WindowBg, (240, 240, 240, 255))
+            add_theme_color(mvThemeCol_FrameBg, (220, 220, 220, 255))
+            add_theme_color(mvThemeCol_Button, (200, 200, 200, 255))
+            add_theme_color(mvThemeCol_ButtonHovered, (180, 180, 180, 255))
+            add_theme_color(mvThemeCol_ButtonActive, (150, 150, 150, 255))
+            add_theme_color(mvThemeCol_Text, (20, 20, 20, 255))
+            add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
+
+def apply_theme(theme_tag):
+    bind_theme(theme_tag)
+
+def toggle_theme(sender, app_data, user_data):
+    global dark_mode
+    dark_mode = not dark_mode
+    apply_theme("dark_theme" if dark_mode else "light_theme")
+
+
+
 def build_gui():
     global now_playing_text
-    with window(label="YTLM Control Panel", tag="MainWindow", width=500, height=300):
-        now_playing_text = add_text("Now Playing: Nothing")
-        add_spacer(height=20)  # replaced add_spacing
 
-        # Group buttons horizontally instead of add_same_line
+    with window(label="YTLM Control Panel", tag="MainWindow", width=670, height=350, pos=(100, 100)):
+        set_primary_window("MainWindow", True)
+
+        add_spacer(height=10)
+
+        # Now Playing Text
+        now_playing_text = add_text("Now Playing: Nothing", wrap=600)
+        add_separator()
+        add_spacer(height=10)
+
+        # Playback Buttons
         with group(horizontal=True):
-            add_button(label="Play / Pause", callback=lambda: player.pause())
-            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()])
-            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()])
-            add_button(label="Refresh", callback=update_now_playing)
+            add_button(label="Play / Pause", callback=lambda: player.pause(), width=120)
+            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=100)
+            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=100)
+            add_button(label="Refresh", callback=update_now_playing, width=100)
 
-    create_viewport(title='YTLM', width=600, height=300)
+        add_spacer(height=15)
+
+        # Volume Control
+        add_text("Volume")
+        add_slider_float(label="", default_value=player.get_media_player().audio_get_volume() / 100,
+                         min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
+
+        add_spacer(height=15)
+
+        # Song Progress
+        add_text("Song Progress")
+        with group(horizontal=True):
+            add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
+                             width=400, callback=on_song_slider_change, format="")
+            add_text("00:00 / 00:00", tag="song_time_text")
+            
+        add_spacer(height=20)
+
+        add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200)
+
+        add_spacer(height=20)
+
+        # Quit Button
+        add_button(label="Quit", callback=lambda: quit_program(), width=100)
+    
+    create_dark_theme()
+    create_light_theme()
+    create_viewport(title='LYTE Control Panel', width=700, height=400)
     setup_dearpygui()
     show_viewport()
-    set_primary_window("MainWindow", True)
     start_dearpygui()
     destroy_context()
 
 def run_gui_thread():
     threading.Thread(target=build_gui, daemon=True).start()
 
+
+
 # ---------------------- Threads ----------------------
 
 def poll_chat():
-    while True:
+    while not should_exit:
         if chat.is_alive():
             for message in chat.get().sync_items():
                 on_chat_message(message)
         time.sleep(1)
 
 def vlc_loop():
-    while True:
+    while not should_exit:
         if player.get_state() == vlc.State.Ended and media_list.count() > 0:
             player.play()
         time.sleep(1)
 
+def update_slider_thread():
+    global ignore_slider_callback, last_gui_update_time
+
+    while not does_item_exist(song_slider_tag) and not should_exit:
+        time.sleep(0.1)
+
+    while not should_exit:
+        time.sleep(0.1)
+        media_player = player.get_media_player()
+        if not media_player:
+            continue
+
+        curr = get_curr_songtime()
+        total = get_song_length()
+        if curr is None or total is None or total <= 0:
+            continue
+
+        # Only update slider if user hasn't just scrubbed
+        if current_time() - last_user_seek_time > 1.0 and does_item_exist(song_slider_tag):
+            progress = curr / total
+            ignore_slider_callback = True
+            set_value(song_slider_tag, progress)
+            ignore_slider_callback = False
+
+        # Update time text regardless
+        set_value("song_time_text", f"{format_time(curr)} / {format_time(total)}")
+
 run_gui_thread()
 threading.Thread(target=vlc_loop, daemon=True).start()
 threading.Thread(target=poll_chat, daemon=True).start()
+threading.Thread(target=update_slider_thread, daemon=True).start()
 
 while True:
     time.sleep(1)
