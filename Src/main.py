@@ -112,6 +112,8 @@ def quit_program():
     global should_exit
     should_exit = True
     
+    logging.info("Shutting down program")
+
     try:
         player.stop()
         media_player = player.get_media_player()
@@ -232,12 +234,7 @@ def on_chat_message(chat_message):
                 show_toast(video_id, username)
     except Exception as e:
         logging.error("Chat message error: %s", e)
-
-# ---------------------- GUI ----------------------
-
-create_context()
-now_playing_text = None
-
+    
 def update_now_playing():
     media = player.get_media_player().get_media()
     if media:
@@ -250,41 +247,106 @@ def update_now_playing():
     else:
         set_value(now_playing_text, "Now Playing: Nothing")
 
+
+# ---------------------- GUI ----------------------
+create_context()
+now_playing_text = None
 song_slider_tag = "song_slider"
 ignore_slider_callback = False
 
+dark_mode = True
+dark_theme = None
+light_theme = None
+
+def create_dark_theme():
+    with theme(tag="dark_theme"):
+        with theme_component(mvAll):
+            add_theme_color(mvThemeCol_WindowBg, (30, 30, 30, 255))
+            add_theme_color(mvThemeCol_FrameBg, (50, 50, 50, 255))
+            add_theme_color(mvThemeCol_Button, (70, 70, 70, 255))
+            add_theme_color(mvThemeCol_ButtonHovered, (100, 100, 100, 255))
+            add_theme_color(mvThemeCol_ButtonActive, (120, 120, 120, 255))
+            add_theme_color(mvThemeCol_Text, (220, 220, 220, 255))
+            add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
+
+def create_light_theme():
+    with theme(tag="light_theme"):
+        with theme_component(mvAll):
+            add_theme_color(mvThemeCol_WindowBg, (240, 240, 240, 255))
+            add_theme_color(mvThemeCol_FrameBg, (220, 220, 220, 255))
+            add_theme_color(mvThemeCol_Button, (200, 200, 200, 255))
+            add_theme_color(mvThemeCol_ButtonHovered, (180, 180, 180, 255))
+            add_theme_color(mvThemeCol_ButtonActive, (150, 150, 150, 255))
+            add_theme_color(mvThemeCol_Text, (20, 20, 20, 255))
+            add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
+
+def apply_theme(theme_tag):
+    bind_theme(theme_tag)
+
+def toggle_theme(sender, app_data, user_data):
+    global dark_mode
+    dark_mode = not dark_mode
+    apply_theme("dark_theme" if dark_mode else "light_theme")
+
+
+
 def build_gui():
     global now_playing_text
-    with window(label="YTLM Control Panel", tag="MainWindow", width=500, height=300):
-        now_playing_text = add_text("Now Playing: Nothing")
-        add_spacer(height=20)
 
-        # Group buttons horizontally
+    with window(label="YTLM Control Panel", tag="MainWindow", width=670, height=350, pos=(100, 100)):
+        set_primary_window("MainWindow", True)
+
+        add_spacer(height=10)
+
+        # Now Playing Text
+        now_playing_text = add_text("Now Playing: Nothing", wrap=600)
+        add_separator()
+        add_spacer(height=10)
+
+        # Playback Buttons
         with group(horizontal=True):
-            add_button(label="Play / Pause", callback=lambda: player.pause())
-            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()])
-            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()])
-            add_button(label="Refresh", callback=update_now_playing)
-            add_slider_float(label="Volume", default_value=player.get_media_player().audio_get_volume() / 100, min_value=0.0, max_value=100, width=300, callback=on_volume_change, format="%.0f")
-      
-        add_spacer(height=20)
+            add_button(label="Play / Pause", callback=lambda: player.pause(), width=120)
+            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=100)
+            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=100)
+            add_button(label="Refresh", callback=update_now_playing, width=100)
+
+        add_spacer(height=15)
+
+        # Volume Control
+        add_text("Volume")
+        add_slider_float(label="", default_value=player.get_media_player().audio_get_volume() / 100,
+                         min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
+
+        add_spacer(height=15)
+
+        # Song Progress
+        add_text("Song Progress")
         with group(horizontal=True):
-            add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0, width=400, callback=on_song_slider_change, format="")
+            add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
+                             width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
+            
+        add_spacer(height=20)
+
+        add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200)
 
         add_spacer(height=20)
-        add_button(label="Quit", callback=lambda: quit_program())
 
-    create_viewport(title='LYTE Control Panel', width=670, height=100)
-
+        # Quit Button
+        add_button(label="Quit", callback=lambda: quit_program(), width=100)
+    
+    create_dark_theme()
+    create_light_theme()
+    create_viewport(title='LYTE Control Panel', width=700, height=400)
     setup_dearpygui()
     show_viewport()
-    set_primary_window("MainWindow", True)
     start_dearpygui()
     destroy_context()
 
 def run_gui_thread():
     threading.Thread(target=build_gui, daemon=True).start()
+
+
 
 # ---------------------- Threads ----------------------
 
