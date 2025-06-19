@@ -85,7 +85,7 @@ jobs:
             What's New:
 
             ${{ steps.format_notes.outputs.formatted_release_notes }}
-          files: dist/YTLM.exe
+          files: dist/LYTE.exe
           draft: ${{ steps.flags.outputs.draft }}
           prerelease: ${{ steps.flags.outputs.prerelease }}
         env:
