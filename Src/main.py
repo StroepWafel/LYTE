@@ -107,7 +107,7 @@ logging.info("Started VLC...")
 # ---------------------- Functions ----------------------
 
 def on_close_attempt(sender, data):
-    print("Program force closed - Unless program is frozen, please use 'Quit' button instead!")
+    print("Program force closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
 
 def initialize_chat():
     global chat
@@ -475,7 +475,7 @@ def show_config_menu(invalid_id=False):
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='Configure LYTE', width=520, height=280)
+    create_viewport(title='Configure LYTE', width=520, height=300)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
