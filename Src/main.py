@@ -5,6 +5,7 @@ import logging
 import sys
 import re
 import threading
+import traceback
 from collections import defaultdict
 from datetime import datetime
 from time import time as current_time
@@ -68,7 +69,8 @@ default_config = {
     "RATE_LIMIT_SECONDS": 240,
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
-    "QUEUE_COMMAND": "queue"
+    "QUEUE_COMMAND": "queue",
+    "DARK_MODE": "True"
 }
 
 ensure_file_exists(CONFIG_PATH, default_config)
@@ -87,10 +89,11 @@ RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 10)
 TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true"
 PREFIX = config.get('PREFIX', "!")
 QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
+DARK_MODE = config.get('DARK_MODE', "True").lower() == "true"
 BANNED_IDS = bannedIDs
 BANNED_USERS = bannedUsers
 user_last_command = defaultdict(lambda: 0)
-
+config_success = False
 # ---------------------- VLC Setup ----------------------
 
 instance = vlc.Instance("--one-instance")
@@ -98,15 +101,33 @@ player = instance.media_list_player_new()
 media_list = instance.media_list_new()
 player.set_media_list(media_list)
 player.play()
+player.get_media_player().audio_set_volume(player.get_media_player().audio_get_volume())
 logging.info("Started VLC...")
 
-try:
-    chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
-except Exception as e:
-    logging.critical("Error while listening to livestream chat: %s", e)
-    sys.exit(1)
-
 # ---------------------- Functions ----------------------
+
+def on_close_attempt(sender, data):
+    print("Program force closed - Unless program is frozen, please use 'Quit' button instead!")
+
+def initialize_chat():
+    global chat
+    try:
+        chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
+        return True
+    except Exception as e:
+        logging.critical(f"Invalid YouTube Video ID '{YOUTUBE_VIDEO_ID}'")
+        logging.critical(f"Error {traceback.format_exc()}")
+        return False
+
+def load_config():
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+    with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
+        config = json.load(f)
+    YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
+    RATE_LIMIT_SECONDS = config.get("RATE_LIMIT_SECONDS", 10)
+    TOAST_NOTIFICATIONS = config.get("TOAST_NOTIFICATIONS", "True").lower() == "true"
+    PREFIX = config.get("PREFIX", "!")
+    QUEUE_COMMAND = config.get("QUEUE_COMMAND", "queue")
 
 def quit_program():
     global should_exit
@@ -127,7 +148,7 @@ def quit_program():
         logging.error(f"Error releasing VLC resources: {e}")
 
     stop_dearpygui()
-    sys.exit(0)
+    logging.info("GUI closed")
 
 def format_time(seconds):
     minutes = int(seconds // 60)
@@ -174,11 +195,12 @@ def on_volume_change(sender, app_data, user_data):
     player.get_media_player().audio_set_volume(volume)
 
 def show_toast(video_id, username):
-    notification.notify(
-        title="Requested by: " + username,
-        message="Adding '" + get_video_name(video_id) + "' to queue",
-        timeout=5
-    )
+    if TOAST_NOTIFICATIONS:
+        notification.notify(
+            title="Requested by: " + username,
+            message="Adding '" + get_video_name(video_id) + "' to queue",
+            timeout=5
+        )
 
 def get_video_title(youtube_url):
     ydl_opts = { 'quiet': True, 'extract_flat': True }
@@ -228,10 +250,9 @@ def on_chat_message(chat_message):
             if video_id in BANNED_IDS or username in BANNED_USERS:
                 return
             queue_song("https://www.youtube.com/watch?v=" + video_id, username)
+            show_toast(video_id, username)
             update_now_playing()
             user_last_command[username] = current_time
-            if TOAST_NOTIFICATIONS:
-                show_toast(video_id, username)
     except Exception as e:
         logging.error("Chat message error: %s", e)
     
@@ -254,7 +275,6 @@ now_playing_text = None
 song_slider_tag = "song_slider"
 ignore_slider_callback = False
 
-dark_mode = True
 dark_theme = None
 light_theme = None
 
@@ -268,6 +288,7 @@ def create_dark_theme():
             add_theme_color(mvThemeCol_ButtonActive, (120, 120, 120, 255))
             add_theme_color(mvThemeCol_Text, (220, 220, 220, 255))
             add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
+            add_theme_color(mvThemeCol_Header, (70, 70, 70, 255))
 
 def create_light_theme():
     with theme(tag="light_theme"):
@@ -279,19 +300,66 @@ def create_light_theme():
             add_theme_color(mvThemeCol_ButtonActive, (150, 150, 150, 255))
             add_theme_color(mvThemeCol_Text, (20, 20, 20, 255))
             add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
+            add_theme_color(mvThemeCol_Header, (200, 200, 200, 255))
 
 def apply_theme(theme_tag):
     bind_theme(theme_tag)
 
+
 def toggle_theme(sender, app_data, user_data):
-    global dark_mode
-    dark_mode = not dark_mode
-    apply_theme("dark_theme" if dark_mode else "light_theme")
+    global DARK_MODE
+    DARK_MODE = not DARK_MODE
+    apply_theme("dark_theme" if DARK_MODE else "light_theme")
 
+    updated_config = {
+        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
+        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
+        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
+        "PREFIX": PREFIX,
+        "QUEUE_COMMAND": QUEUE_COMMAND,
+        "DARK_MODE": str(DARK_MODE)
+    }
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(updated_config, f, indent=4)
 
+def set_theme(dark_mode):
+    global DARK_MODE
+    DARK_MODE = dark_mode
+    apply_theme("dark_theme" if DARK_MODE else "light_theme")
+
+    updated_config = {
+        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
+        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
+        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
+        "PREFIX": PREFIX,
+        "QUEUE_COMMAND": QUEUE_COMMAND,
+        "DARK_MODE": str(DARK_MODE)
+    }
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(updated_config, f, indent=4)
 
 def build_gui():
+    create_context()
     global now_playing_text
+
+    def update_settings_from_menu():
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+        
+        RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
+        TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
+        PREFIX = get_value("prefix_input")
+        QUEUE_COMMAND = get_value("queue_input")
+
+        updated_config = {
+            "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
+            "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
+            "TOAST_NOTIFICATIONS": TOAST_NOTIFICATIONS,
+            "PREFIX": PREFIX,
+            "QUEUE_COMMAND": QUEUE_COMMAND,
+            "DARK_MODE": DARK_MODE
+        }
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(updated_config, f, indent=4)
 
     with window(label="YTLM Control Panel", tag="MainWindow", width=670, height=350, pos=(100, 100)):
         set_primary_window("MainWindow", True)
@@ -314,8 +382,7 @@ def build_gui():
 
         # Volume Control
         add_text("Volume")
-        add_slider_float(label="", default_value=player.get_media_player().audio_get_volume() / 100,
-                         min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
+        add_slider_float(label="", default_value=25, min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
 
         add_spacer(height=15)
 
@@ -325,7 +392,18 @@ def build_gui():
             add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
                              width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
-            
+
+        with collapsing_header(label="Settings"):
+            add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
+            add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
+            add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
+            add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+
+            add_spacer(height=10)
+            add_button(label="Update Settings", callback=update_settings_from_menu)
+
+
+                
         add_spacer(height=20)
 
         add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200)
@@ -334,18 +412,65 @@ def build_gui():
 
         # Quit Button
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
-    
+
     create_dark_theme()
     create_light_theme()
     create_viewport(title='LYTE Control Panel', width=700, height=400)
+    apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
+    set_exit_callback(on_close_attempt)
+    configure_viewport(0, resizable=False)
     start_dearpygui()
     destroy_context()
 
-def run_gui_thread():
-    threading.Thread(target=build_gui, daemon=True).start()
+def show_config_menu(invalid_id=False):
+    create_context()
+    def save_and_start_callback():
+        updated_config = {
+            "YOUTUBE_VIDEO_ID": get_value("id_input"),
+            "RATE_LIMIT_SECONDS": int(get_value("rate_limit_input")),
+            "TOAST_NOTIFICATIONS": str(get_value("toast_checkbox")),
+            "PREFIX": get_value("prefix_input"),
+            "QUEUE_COMMAND": get_value("queue_input"),
+            "DARK_MODE": str(get_value("dark_mode_checkbox"))
+        }
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(updated_config, f, indent=4)
+        set_theme(get_value("dark_mode_checkbox"))
+        stop_dearpygui()
 
+    with window(label="Configure LYTE Settings", tag="ConfigWindow", width=500, height=370):
+        set_primary_window("ConfigWindow", True)
+
+        add_input_text(label="YouTube Livestream ID", default_value=config["YOUTUBE_VIDEO_ID"], tag="id_input")
+
+        if invalid_id:
+            add_text("Invalid or inaccessible livestream ID.", color=(255, 100, 100), tag="invalid_id_warning")
+
+        add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
+        add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
+        add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
+        add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+        add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
+        
+        add_spacer(height=10)
+        add_button(label="Save and Start", callback=save_and_start_callback)
+        
+        add_spacer(height=20)
+
+        # Quit Button
+        add_button(label="Quit", callback=lambda: quit_program(), width=100)
+    create_dark_theme()
+    create_light_theme()
+    create_viewport(title='Configure LYTE', width=520, height=280)
+    apply_theme("dark_theme" if DARK_MODE else "light_theme")
+    setup_dearpygui()
+    show_viewport()
+    set_exit_callback(on_close_attempt)
+    configure_viewport(0, resizable=False)
+    start_dearpygui()
+    destroy_context()
 
 
 # ---------------------- Threads ----------------------
@@ -390,10 +515,31 @@ def update_slider_thread():
         # Update time text regardless
         set_value("song_time_text", f"{format_time(curr)} / {format_time(total)}")
 
-run_gui_thread()
+def update_now_playing_thread():
+    while not should_exit:
+        update_now_playing()
+        time.sleep(1)
+
+
+# ---------------------- Startup ----------------------
+
+# Show configuration editor first
+show_config_menu()
+
+while not config_success:
+    load_config()
+    if initialize_chat():
+        break  # valid ID, continue
+    logging.warning("Chat init failed. Reloading config window.")
+    show_config_menu(invalid_id=True)
+
+load_config()
+
+threading.Thread(target=build_gui, daemon=True).start()
 threading.Thread(target=vlc_loop, daemon=True).start()
 threading.Thread(target=poll_chat, daemon=True).start()
 threading.Thread(target=update_slider_thread, daemon=True).start()
+threading.Thread(target=update_now_playing_thread, daemon=True).start()
 
-while True:
+while not should_exit:
     time.sleep(1)
