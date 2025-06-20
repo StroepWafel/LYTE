@@ -427,6 +427,17 @@ def build_gui():
 def show_config_menu(invalid_id=False):
     create_context()
     def save_and_start_callback():
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE
+
+        # Update in-memory config from GUI values
+        YOUTUBE_VIDEO_ID = get_value("id_input")
+        RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
+        TOAST_NOTIFICATIONS = str(get_value("toast_checkbox")).lower() == "true"
+        PREFIX = get_value("prefix_input")
+        QUEUE_COMMAND = get_value("queue_input")
+        DARK_MODE = get_value("dark_mode_checkbox")
+
+        # Save config to file
         updated_config = {
             "YOUTUBE_VIDEO_ID": get_value("id_input"),
             "RATE_LIMIT_SECONDS": int(get_value("rate_limit_input")),
@@ -437,7 +448,8 @@ def show_config_menu(invalid_id=False):
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
-        set_theme(get_value("dark_mode_checkbox"))
+
+        set_theme(DARK_MODE)
         stop_dearpygui()
 
     with window(label="Configure LYTE Settings", tag="ConfigWindow", width=500, height=370):
