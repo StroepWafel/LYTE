@@ -3,5 +3,6 @@
     "RATE_LIMIT_SECONDS": 240,
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
-    "QUEUE_COMMAND": "queue"
+    "QUEUE_COMMAND": "queue",
+    "DARK_MODE": "True"
 }
