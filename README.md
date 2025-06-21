@@ -97,7 +97,7 @@ this file is used to store all banned youtube usernames (at some point i will tr
 ```
 # Notes
 
-- This program can be run on any PC with no API key or cookie required
+- This program can be run on any windows PC with no API key or cookie required
 - If used, please credit the repository in the description or somewhere in the video
 
 ## Stars
