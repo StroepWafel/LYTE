@@ -25,7 +25,10 @@ Live YouTube Entertainment (LYTE) is a program that allows viewers of a live str
 The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` is the ID for the youtube music video (everything after `?v=`). The command listener (default `!`) and command (default `queue`) can be changed in the [config](#config-documentation) if desired.
 
 > [!IMPORTANT]
->THIS COMMAND ONLY WORKS WITH IDs OF VIDEOS THAT ARE ON YOUTUBE MUSIC; REGULAR VIDEOS WILL NOT DOWNLOAD
+>This command only works with IDs of videos that are on YouTube Music; regular videos will not download.
+
+> [!WARNING]
+> This Program currently only works on windows, I am working on fixing that but it is not my main priority, if you have gotten it to work without removing any functionality you can create a PR and i will review it.
 
 ## Setup
 
