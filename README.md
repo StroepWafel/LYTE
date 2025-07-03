@@ -28,7 +28,7 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 >This command only works with IDs of videos that are on YouTube Music; regular videos will not download.
 
 > [!WARNING]
-> This Program is known to not work on linux, I am working on this but it is not my main priority, if you have gotten it to work on linux without removing any functionality you can create a PR and i will review it.
+> This Program is known to not work on linux, I am working on this but it is not my main priority, if you have gotten it to work on linux without removing any functionality you can create a PR and I will review it.
 
 ## Setup
 
