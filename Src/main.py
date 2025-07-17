@@ -105,7 +105,6 @@ player.get_media_player().audio_set_volume(player.get_media_player().audio_get_v
 logging.info("Started VLC...")
 
 # ---------------------- Functions ----------------------
-
 def on_close_attempt(sender, data):
     print("Program force closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
 

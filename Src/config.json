@@ -1,6 +1,6 @@
 {
-    "YOUTUBE_VIDEO_ID": "LIVESTREAM_ID",
-    "RATE_LIMIT_SECONDS": 240,
+    "YOUTUBE_VIDEO_ID": "xORCbIptqcc",
+    "RATE_LIMIT_SECONDS": 0,
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
     "QUEUE_COMMAND": "queue",
