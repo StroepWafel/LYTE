@@ -621,7 +621,7 @@ def update_now_playing_thread():
 # Show configuration editor first
 show_config_menu()
 
-while not config_success:
+while not config_success and not should_exit:
     load_config()
     if initialize_chat():
         break  # valid ID, continue
