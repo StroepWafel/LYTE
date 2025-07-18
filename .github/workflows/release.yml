@@ -48,7 +48,7 @@ jobs:
 
       - name: Run PyInstaller
         run: |
-          python -m PyInstaller main.spec
+          python -m pyinstaller --onefile --noconsole --clean --log-level=DEBUG main.py
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
