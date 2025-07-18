@@ -23,13 +23,6 @@ def get_app_folder():
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
-def resource_path(relative_path):
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
-
 APP_FOLDER = get_app_folder()
 LOG_FOLDER = os.path.join(APP_FOLDER, 'logs')
 os.makedirs(LOG_FOLDER, exist_ok=True)
