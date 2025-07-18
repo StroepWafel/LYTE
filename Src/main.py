@@ -60,22 +60,74 @@ def ensure_file_exists(filepath, default_content):
             json.dump(default_content, f, indent=4)
         logging.info(f"Created missing file: {filepath}")
 
+def ensure_json_valid(filepath, default_content):
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                # Reset to defaults if file is corrupted
+                with open(filepath, 'w', encoding='utf-8') as fw:
+                    json.dump(default_content, fw, indent=4)
+                logging.warning(f"Invalid JSON in {filepath}. Resetting to default.")
+                return
+
+        modified = False
+        cleaned_data = {}
+
+        # Copy over valid keys from default_config
+        for key, default_value in default_content.items():
+            if key in data:
+                cleaned_data[key] = data[key]
+            else:
+                cleaned_data[key] = default_value
+                modified = True
+                logging.info(f"Added missing key '{key}' to {filepath}")
+
+
+        # Check for and remove extra keys
+        extra_keys = set(data.keys()) - set(default_content.keys())
+        if extra_keys:
+            modified = True
+            logging.info(f"Removing extra keys from {filepath}: {extra_keys}")
+
+        if modified:
+            # Create a backup manually
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = f"{filepath}.backup_{timestamp}.json"
+            with open(backup_path, 'w', encoding='utf-8') as backup_file:
+                json.dump(data, backup_file, indent=4)
+            logging.info(f"Backed up original file to {backup_path}")
+
+            # Write cleaned data
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(cleaned_data, f, indent=4)
+            logging.info(f"Cleaned and updated {filepath}")
+
+    except Exception as e:
+        logging.error(f"Error validating JSON file {filepath}: {e}")
+
+
 CONFIG_PATH = os.path.join(APP_FOLDER, 'config.json')
 BANNED_IDS_PATH = os.path.join(APP_FOLDER, 'banned_IDs.json')
 BANNED_USERS_PATH = os.path.join(APP_FOLDER, 'banned_users.json')
 
 default_config = {
     "YOUTUBE_VIDEO_ID": "LIVESTREAM_ID",
-    "RATE_LIMIT_SECONDS": 240,
+    "RATE_LIMIT_SECONDS": 3000,
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
     "QUEUE_COMMAND": "queue",
-    "DARK_MODE": "True"
+    "VOLUME": 25,
+    "DARK_MODE": "True",
+    "ALLOW_URLS": "False"
 }
 
 ensure_file_exists(CONFIG_PATH, default_config)
 ensure_file_exists(BANNED_IDS_PATH, [])
 ensure_file_exists(BANNED_USERS_PATH, [])
+
+ensure_json_valid(CONFIG_PATH, default_config)
 
 with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
     config = json.load(f)
@@ -85,11 +137,13 @@ with open(BANNED_USERS_PATH, 'r', encoding="utf-8") as f:
     bannedUsers = json.load(f)
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
-RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 10)
+RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 3000)
 TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true"
 PREFIX = config.get('PREFIX', "!")
 QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
+VOLUME = config.get('VOLUME', 25)
 DARK_MODE = config.get('DARK_MODE', "True").lower() == "true"
+ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
 BANNED_IDS = bannedIDs
 BANNED_USERS = bannedUsers
 user_last_command = defaultdict(lambda: 0)
@@ -106,7 +160,7 @@ logging.info("Started VLC...")
 
 # ---------------------- Functions ----------------------
 def on_close_attempt(sender, data):
-    print("Program force closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
+    print("Program closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
 
 def initialize_chat():
     global chat
@@ -119,7 +173,7 @@ def initialize_chat():
         return False
 
 def load_config():
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
     YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
@@ -127,6 +181,8 @@ def load_config():
     TOAST_NOTIFICATIONS = config.get("TOAST_NOTIFICATIONS", "True").lower() == "true"
     PREFIX = config.get("PREFIX", "!")
     QUEUE_COMMAND = config.get("QUEUE_COMMAND", "queue")
+    VOLUME = config.get("VOLUME", 25)
+    ALLOW_URLS = config.get("ALLOW_URLS", "True").lower() == "true"
 
 def quit_program():
     global should_exit
@@ -190,8 +246,25 @@ def get_song_length():
     return length_sec
 
 def on_volume_change(sender, app_data, user_data):
-    volume = int(app_data)  # VLC expects volume 0–100
-    player.get_media_player().audio_set_volume(volume)
+    global VOLUME
+    VOLUME = int(app_data)  # VLC expects volume 0–100
+    player.get_media_player().audio_set_volume(VOLUME)
+
+    updated_config = {
+        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
+        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
+        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
+        "PREFIX": PREFIX,
+        "QUEUE_COMMAND": QUEUE_COMMAND,
+        "VOLUME": VOLUME,
+        "DARK_MODE": str(DARK_MODE),
+        "ALLOW_URLS": str(ALLOW_URLS)
+    }
+
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(updated_config, f, indent=4)
+    
+
 
 def show_toast(video_id, username):
     if TOAST_NOTIFICATIONS:
@@ -232,7 +305,7 @@ def queue_song(youtube_url, requester):
         if player.get_state() != vlc.State.Playing:
             player.play()
     except Exception as e:
-        logging.error(f"Error queuing song {youtube_url}: {e}")
+        logging.warning(f"Error queuing song {youtube_url}: {e}")
 
 def on_chat_message(chat_message):
     try:
@@ -241,13 +314,19 @@ def on_chat_message(chat_message):
         current_time = time.time()
         if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
             parts = message.split()
-            if len(parts) < 2:
+            if not len(parts) == 2:
                 return
             video_id = parts[1]
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
             if video_id in BANNED_IDS or username in BANNED_USERS:
                 return
+            if 'watch?v=' in video_id:
+                if ALLOW_URLS:
+                    video_id = video_id.split('watch?v=', 1)[1]
+                else:
+                    logging.warning(f"user {username} attempted to queue a URL but URL queuing is disabled! (url: {video_id})")
+                    return
             queue_song("https://www.youtube.com/watch?v=" + video_id, username)
             show_toast(video_id, username)
             update_now_playing()
@@ -316,7 +395,9 @@ def toggle_theme(sender, app_data, user_data):
         "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
         "PREFIX": PREFIX,
         "QUEUE_COMMAND": QUEUE_COMMAND,
-        "DARK_MODE": str(DARK_MODE)
+        "VOLUME": VOLUME,
+        "DARK_MODE": str(DARK_MODE),
+        "ALLOW_URLS": str(ALLOW_URLS)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -332,7 +413,9 @@ def set_theme(dark_mode):
         "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
         "PREFIX": PREFIX,
         "QUEUE_COMMAND": QUEUE_COMMAND,
-        "DARK_MODE": str(DARK_MODE)
+        "VOLUME": VOLUME,
+        "DARK_MODE": str(DARK_MODE),
+        "ALLOW_URLS": str(ALLOW_URLS)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -342,20 +425,23 @@ def build_gui():
     global now_playing_text
 
     def update_settings_from_menu():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS
         
         RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
         TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
         PREFIX = get_value("prefix_input")
         QUEUE_COMMAND = get_value("queue_input")
+        ALLOW_URLS = get_value("allowURLs_checkbox")
 
         updated_config = {
             "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
             "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
-            "TOAST_NOTIFICATIONS": TOAST_NOTIFICATIONS,
+            "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
             "PREFIX": PREFIX,
             "QUEUE_COMMAND": QUEUE_COMMAND,
-            "DARK_MODE": DARK_MODE
+            "VOLUME": VOLUME,
+            "DARK_MODE": str(DARK_MODE),
+            "ALLOW_URLS": str(ALLOW_URLS)
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -381,7 +467,7 @@ def build_gui():
 
         # Volume Control
         add_text("Volume")
-        add_slider_float(label="", default_value=25, min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
+        add_slider_float(label="", default_value=config["VOLUME"], min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
 
         add_spacer(height=15)
 
@@ -397,6 +483,7 @@ def build_gui():
             add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
             add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
             add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+            add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
 
             add_spacer(height=10)
             add_button(label="Update Settings", callback=update_settings_from_menu)
@@ -426,7 +513,7 @@ def build_gui():
 def show_config_menu(invalid_id=False):
     create_context()
     def save_and_start_callback():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME
 
         # Update in-memory config from GUI values
         YOUTUBE_VIDEO_ID = get_value("id_input")
@@ -435,6 +522,7 @@ def show_config_menu(invalid_id=False):
         PREFIX = get_value("prefix_input")
         QUEUE_COMMAND = get_value("queue_input")
         DARK_MODE = get_value("dark_mode_checkbox")
+        ALLOW_URLS = get_value("allowURLs_checkbox")
 
         # Save config to file
         updated_config = {
@@ -443,7 +531,9 @@ def show_config_menu(invalid_id=False):
             "TOAST_NOTIFICATIONS": str(get_value("toast_checkbox")),
             "PREFIX": get_value("prefix_input"),
             "QUEUE_COMMAND": get_value("queue_input"),
-            "DARK_MODE": str(get_value("dark_mode_checkbox"))
+            "VOLUME": VOLUME,
+            "DARK_MODE": str(get_value("dark_mode_checkbox")),
+            "ALLOW_URLS": str(get_value("allowURLs_checkbox"))
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -463,6 +553,7 @@ def show_config_menu(invalid_id=False):
         add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
         add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
         add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+        add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
         add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
         
         add_spacer(height=10)

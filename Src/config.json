@@ -4,5 +4,7 @@
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
     "QUEUE_COMMAND": "queue",
-    "DARK_MODE": "True"
+    "VOLUME": 33,
+    "DARK_MODE": "True",
+    "ALLOW_URLS": "True"
 }
