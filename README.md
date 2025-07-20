@@ -105,4 +105,4 @@ This file is used to store all banned YouTube usernames. For the time being, you
 
 ## Stars
 
-[![Star History Chart](https://api.star-history.com/svg?repos=NIDNHU/YTLM\&type=Date)](https://star-history.com/#NIDNHU/YTLM\&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=StroepWafel/LYTE&type=Date)](https://www.star-history.com/#StroepWafel/LYTE&Date)
