@@ -2,6 +2,9 @@
 # LYTE
 Live YouTube Entertainment (LYTE) is a program that allows viewers of a live stream to use commands to queue music
 
+# Donating
+If you find this program helpful or interesting, you can support me on [GitHub Sponsors](https://github.com/sponsors/StroepWafel). Your support is completely optional, but it helps me keep building tools like this — and maybe one day, turn it into my full-time job!
+
 # Contents:
 
 - [Commands](#commands)
