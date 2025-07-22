@@ -113,7 +113,8 @@ default_config = {
     "QUEUE_COMMAND": "queue",
     "VOLUME": 25,
     "DARK_MODE": "True",
-    "ALLOW_URLS": "False"
+    "ALLOW_URLS": "False",
+    "REQUIRE_MEMBERSHIP": "False"
 }
 
 ensure_file_exists(CONFIG_PATH, default_config)
@@ -137,6 +138,7 @@ QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
 VOLUME = config.get('VOLUME', 25)
 DARK_MODE = config.get('DARK_MODE', "True").lower() == "true"
 ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
+REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
 BANNED_IDS = bannedIDs
 BANNED_USERS = bannedUsers
 user_last_command = defaultdict(lambda: 0)
@@ -176,6 +178,8 @@ def load_config():
     QUEUE_COMMAND = config.get("QUEUE_COMMAND", "queue")
     VOLUME = config.get("VOLUME", 25)
     ALLOW_URLS = config.get("ALLOW_URLS", "True").lower() == "true"
+    REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
+
 
 def quit_program():
     global should_exit
@@ -251,7 +255,8 @@ def on_volume_change(sender, app_data, user_data):
         "QUEUE_COMMAND": QUEUE_COMMAND,
         "VOLUME": VOLUME,
         "DARK_MODE": str(DARK_MODE),
-        "ALLOW_URLS": str(ALLOW_URLS)
+        "ALLOW_URLS": str(ALLOW_URLS),
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
     }
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -304,6 +309,7 @@ def on_chat_message(chat_message):
     try:
         username = chat_message.author.name
         channelid = chat_message.author.channelId
+        userismember = chat_message.author.isChatSponsor
         message = chat_message.message
         current_time = time.time()
         if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
@@ -321,6 +327,11 @@ def on_chat_message(chat_message):
                 else:
                     logging.warning(f"user {username} attempted to queue a URL but URL queuing is disabled! (url: {video_id})")
                     return
+                
+            if REQUIRE_MEMBERSHIP and not userismember:
+                logging.warning(f"user {username} attempted to queue a song but they are not a member and 'REQUIRE_MEMBERSHIP' is enabled!")
+                return
+
             queue_song("https://www.youtube.com/watch?v=" + video_id, username)
             show_toast(video_id, username)
             update_now_playing()
@@ -391,7 +402,8 @@ def toggle_theme(sender, app_data, user_data):
         "QUEUE_COMMAND": QUEUE_COMMAND,
         "VOLUME": VOLUME,
         "DARK_MODE": str(DARK_MODE),
-        "ALLOW_URLS": str(ALLOW_URLS)
+        "ALLOW_URLS": str(ALLOW_URLS),
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -409,7 +421,8 @@ def set_theme(dark_mode):
         "QUEUE_COMMAND": QUEUE_COMMAND,
         "VOLUME": VOLUME,
         "DARK_MODE": str(DARK_MODE),
-        "ALLOW_URLS": str(ALLOW_URLS)
+        "ALLOW_URLS": str(ALLOW_URLS),
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -419,13 +432,14 @@ def build_gui():
     global now_playing_text
 
     def update_settings_from_menu():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, REQUIRE_MEMBERSHIP
         
         RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
         TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
         PREFIX = get_value("prefix_input")
         QUEUE_COMMAND = get_value("queue_input")
         ALLOW_URLS = get_value("allowURLs_checkbox")
+        REQUIRE_MEMBERSHIP = get_value("requiremembership_checkbox")
 
         updated_config = {
             "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
@@ -435,7 +449,8 @@ def build_gui():
             "QUEUE_COMMAND": QUEUE_COMMAND,
             "VOLUME": VOLUME,
             "DARK_MODE": str(DARK_MODE),
-            "ALLOW_URLS": str(ALLOW_URLS)
+            "ALLOW_URLS": str(ALLOW_URLS),
+            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -478,6 +493,7 @@ def build_gui():
             add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
             add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
             add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
+            add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="requiremembership_checkbox")
 
             add_spacer(height=10)
             add_button(label="Update Settings", callback=update_settings_from_menu)
@@ -495,7 +511,7 @@ def build_gui():
 
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='LYTE Control Panel', width=700, height=400)
+    create_viewport(title='LYTE Control Panel', width=700, height=450)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
@@ -507,7 +523,7 @@ def build_gui():
 def show_config_menu(invalid_id=False):
     create_context()
     def save_and_start_callback():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP
 
         # Update in-memory config from GUI values
         YOUTUBE_VIDEO_ID = get_value("id_input")
@@ -527,15 +543,17 @@ def show_config_menu(invalid_id=False):
             "QUEUE_COMMAND": get_value("queue_input"),
             "VOLUME": VOLUME,
             "DARK_MODE": str(get_value("dark_mode_checkbox")),
-            "ALLOW_URLS": str(get_value("allowURLs_checkbox"))
+            "ALLOW_URLS": str(get_value("allowURLs_checkbox")),
+            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
         }
+
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
 
         set_theme(DARK_MODE)
         stop_dearpygui()
 
-    with window(label="Configure LYTE Settings", tag="ConfigWindow", width=500, height=370):
+    with window(label="Configure LYTE Settings", tag="ConfigWindow", width=0, height=0):
         set_primary_window("ConfigWindow", True)
 
         add_input_text(label="YouTube Livestream ID", default_value=config["YOUTUBE_VIDEO_ID"], tag="id_input")
@@ -548,6 +566,8 @@ def show_config_menu(invalid_id=False):
         add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
         add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
         add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
+        add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="requiremembership_checkbox")
+
         add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
         
         add_spacer(height=10)
@@ -559,7 +579,7 @@ def show_config_menu(invalid_id=False):
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='Configure LYTE', width=520, height=300)
+    create_viewport(title='Configure LYTE', width=520, height=350)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
