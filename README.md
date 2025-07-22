@@ -97,10 +97,11 @@ This file is used to store all banned YouTube video IDs. For the time being, you
 ```
 
 ### banned_users.json
-This file is used to store all banned YouTube usernames. For the time being, you will have to add them manually to the file, each name should be in quotation marks and separated by commas, for example:
+This file is used to store all banned YouTube user Ids. For the time being, you will have to add them manually to the file, each Id should be in quotation marks and separated by commas, for example:
 ```JSON
 ["name 1", "name 2", "name 3"]
 ```
+To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/)
 # Notes
 
 - This program can be run on any Windows PC with no API key or cookie required
