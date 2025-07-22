@@ -303,6 +303,7 @@ def queue_song(youtube_url, requester):
 def on_chat_message(chat_message):
     try:
         username = chat_message.author.name
+        channelid = chat_message.author.channelId
         message = chat_message.message
         current_time = time.time()
         if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
@@ -312,7 +313,7 @@ def on_chat_message(chat_message):
             video_id = parts[1]
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
-            if video_id in BANNED_IDS or username in BANNED_USERS:
+            if video_id in BANNED_IDS or channelid in BANNED_USERS:
                 return
             if 'watch?v=' in video_id:
                 if ALLOW_URLS:
