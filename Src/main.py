@@ -15,6 +15,7 @@ import requests
 from plyer import notification
 import vlc  # Using python-vlc
 from dearpygui.dearpygui import *
+import forex_python.converter
 
 # ---------------------- App Initialization ----------------------
 
@@ -22,6 +23,8 @@ def get_app_folder():
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+converter = forex_python.converter.CurrencyRates()
 
 APP_FOLDER = get_app_folder()
 LOG_FOLDER = os.path.join(APP_FOLDER, 'logs')
@@ -114,7 +117,9 @@ default_config = {
     "VOLUME": 25,
     "DARK_MODE": "True",
     "ALLOW_URLS": "False",
-    "REQUIRE_MEMBERSHIP": "False"
+    "REQUIRE_MEMBERSHIP": "False",
+    "REQUIRE_SUPERCHAT": "False",
+    "MINIMUM_SUPERCHAT": 3
 }
 
 ensure_file_exists(CONFIG_PATH, default_config)
@@ -139,6 +144,8 @@ VOLUME = config.get('VOLUME', 25)
 DARK_MODE = config.get('DARK_MODE', "True").lower() == "true"
 ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
 REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
+REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
+MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
 BANNED_IDS = bannedIDs
 BANNED_USERS = bannedUsers
 user_last_command = defaultdict(lambda: 0)
@@ -168,7 +175,7 @@ def initialize_chat():
         return False
 
 def load_config():
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
     YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
@@ -179,6 +186,8 @@ def load_config():
     VOLUME = config.get("VOLUME", 25)
     ALLOW_URLS = config.get("ALLOW_URLS", "True").lower() == "true"
     REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
+    REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
+    MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
 
 
 def quit_program():
@@ -256,7 +265,9 @@ def on_volume_change(sender, app_data, user_data):
         "VOLUME": VOLUME,
         "DARK_MODE": str(DARK_MODE),
         "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
+        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
     }
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -310,8 +321,15 @@ def on_chat_message(chat_message):
         username = chat_message.author.name
         channelid = chat_message.author.channelId
         userismember = chat_message.author.isChatSponsor
+        issuperchat = chat_message.type == "superChat"
+        superchatvalue = 0
+
+        if issuperchat:
+            superchatvalue = convert_to_usd(chat_message.amountValue, chat_message.currency) 
+
         message = chat_message.message
         current_time = time.time()
+
         if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
             parts = message.split()
             if not len(parts) == 2:
@@ -330,6 +348,10 @@ def on_chat_message(chat_message):
                 
             if REQUIRE_MEMBERSHIP and not userismember:
                 logging.warning(f"user {username} attempted to queue a song but they are not a member and 'REQUIRE_MEMBERSHIP' is enabled!")
+                return
+
+            if REQUIRE_SUPERCHAT and (not issuperchat or superchatvalue < MINIMUM_SUPERCHAT):
+                logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
             queue_song("https://www.youtube.com/watch?v=" + video_id, username)
@@ -351,6 +373,10 @@ def update_now_playing():
     else:
         set_value(now_playing_text, "Now Playing: Nothing")
 
+
+def convert_to_usd(value = 1, currency_name = "USD"):
+    usd_value = converter.convert(currency_name, 'USD', value)
+    return usd_value
 
 # ---------------------- GUI ----------------------
 create_context()
@@ -403,7 +429,9 @@ def toggle_theme(sender, app_data, user_data):
         "VOLUME": VOLUME,
         "DARK_MODE": str(DARK_MODE),
         "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
+        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -422,7 +450,9 @@ def set_theme(dark_mode):
         "VOLUME": VOLUME,
         "DARK_MODE": str(DARK_MODE),
         "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
+        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -432,14 +462,16 @@ def build_gui():
     global now_playing_text
 
     def update_settings_from_menu():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, REQUIRE_MEMBERSHIP
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
         
         RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
         TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
         PREFIX = get_value("prefix_input")
         QUEUE_COMMAND = get_value("queue_input")
         ALLOW_URLS = get_value("allowURLs_checkbox")
-        REQUIRE_MEMBERSHIP = get_value("requiremembership_checkbox")
+        REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
+        REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
+        MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
 
         updated_config = {
             "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
@@ -450,7 +482,9 @@ def build_gui():
             "VOLUME": VOLUME,
             "DARK_MODE": str(DARK_MODE),
             "ALLOW_URLS": str(ALLOW_URLS),
-            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
+            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
+            "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
+            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -493,7 +527,9 @@ def build_gui():
             add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
             add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
             add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
-            add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="requiremembership_checkbox")
+            add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
+            add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
+            add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
 
             add_spacer(height=10)
             add_button(label="Update Settings", callback=update_settings_from_menu)
@@ -523,7 +559,7 @@ def build_gui():
 def show_config_menu(invalid_id=False):
     create_context()
     def save_and_start_callback():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
 
         # Update in-memory config from GUI values
         YOUTUBE_VIDEO_ID = get_value("id_input")
@@ -533,6 +569,8 @@ def show_config_menu(invalid_id=False):
         QUEUE_COMMAND = get_value("queue_input")
         DARK_MODE = get_value("dark_mode_checkbox")
         ALLOW_URLS = get_value("allowURLs_checkbox")
+        REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
+        MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
 
         # Save config to file
         updated_config = {
@@ -544,7 +582,9 @@ def show_config_menu(invalid_id=False):
             "VOLUME": VOLUME,
             "DARK_MODE": str(get_value("dark_mode_checkbox")),
             "ALLOW_URLS": str(get_value("allowURLs_checkbox")),
-            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP)
+            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
+            "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
+            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
         }
 
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -566,7 +606,9 @@ def show_config_menu(invalid_id=False):
         add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
         add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
         add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
-        add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="requiremembership_checkbox")
+        add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
+        add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
+        add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
 
         add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
         
@@ -579,7 +621,7 @@ def show_config_menu(invalid_id=False):
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='Configure LYTE', width=520, height=350)
+    create_viewport(title='Configure LYTE', width=535, height=400)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
