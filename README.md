@@ -17,6 +17,10 @@ If you make money from the use of or find this program helpful and interesting, 
   - [PREFIX](#prefix)  
   - [QUEUE_COMMAND](#queue_command)
   - [DARK_MODE](#dark_mode)
+  - [ALLOW_URLS](#allow_urls)
+  - [REQUIRE_MEMBERSHIP](#require_membership)
+  - [REQUIRE_SUPERCHAT](#require_superchat)
+  - [MINIMUM_SUPERCHAT](#minimum_superchat)
   - [banned_IDs.json](#banned_idsjson)
   - [banned_users.json](#banned_usersjson)
 - [Notes](#notes)  
@@ -90,6 +94,18 @@ This configuration option allows you to set any string as the command for queuei
 ### DARK_MODE
 This configuration option determines whether the UI will use dark or light mode
 
+### ALLOW_URLS
+This configuration option determines whether users can request songs with full URLs
+
+### REQUIRE_MEMBERSHIP
+This configuration option determines whether users need to be a member of the channel to request a song
+
+### REQUIRE_SUPERCHAT
+This configuration option determines whether users need to send a superchat to request a song
+
+### MINIMUM_SUPERCHAT
+This configuration option is supplementary to [REQUIRE_SUPERCHAT](#require_superchat) and determines the minimum value of the superchat (in USD) that the user must spend to request a song.
+
 ### banned_IDs.json
 This file is used to store all banned YouTube video IDs. For the time being, you will have to add them manually to the file. Each video ID should be in quotation marks and separated by commas, for example:
 ```JSON
@@ -102,6 +118,8 @@ This file is used to store all banned YouTube user Ids. For the time being, you 
 ["name 1", "name 2", "name 3"]
 ```
 To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/)
+
+
 # Notes
 
 - This program can be run on any Windows PC with no API key or cookie required
