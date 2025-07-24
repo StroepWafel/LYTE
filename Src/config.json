@@ -1,10 +1,13 @@
 {
-    "YOUTUBE_VIDEO_ID": "xORCbIptqcc",
+    "YOUTUBE_VIDEO_ID": "STREAM_ID",
     "RATE_LIMIT_SECONDS": 0,
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
     "QUEUE_COMMAND": "queue",
     "VOLUME": 33,
     "DARK_MODE": "True",
-    "ALLOW_URLS": "True"
+    "ALLOW_URLS": "False"
+    "REQUIRE_MEMBERSHIP": "False",
+    "REQUIRE_SUPERCHAT": "False",
+    "MINIMUM_SUPERCHAT": 3
 }
