@@ -20,10 +20,6 @@ on:
         description: 'Quick summary of release to append to title'
         required: true
         type: string
-      release_notes:
-        description: 'What was added in the release (Markdown, use \\n for new lines)'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -55,12 +51,6 @@ jobs:
         with:
           name: LYTE_Build
           path: dist/LYTE.exe
-      - name: Format release notes
-        id: format_notes
-        shell: pwsh
-        run: |
-          $notes = "${{ github.event.inputs.release_notes }}" -replace "\\n", "`n"
-          "formatted_release_notes<<EOF`n$notes`nEOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: Set release flags
         id: flags
         run: |
@@ -82,9 +72,14 @@ jobs:
           tag_name: ${{ github.event.inputs.release_version }}-${{ github.event.inputs.release_channel }}
           name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
           body: |
-            What's New:
+            ## What's New:
 
-            ${{ steps.format_notes.outputs.formatted_release_notes }}
+            ### Features:
+
+            ### Under The Hood:
+
+            ### Bugs Squashed:
+          
           files: dist/LYTE.exe
           draft: ${{ steps.flags.outputs.draft }}
           prerelease: ${{ steps.flags.outputs.prerelease }}
