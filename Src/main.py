@@ -501,10 +501,19 @@ def build_gui():
 
         # Playback Buttons
         with group(horizontal=True):
-            add_button(label="Play / Pause", callback=lambda: player.pause(), width=120)
-            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=100)
-            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=100)
-            add_button(label="Refresh", callback=update_now_playing, width=100)
+            add_button(label="Play / Pause", callback=lambda: player.pause(), width=120, tag="play_button")
+            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=100, tag="prev_button")
+            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=100, tag="next_button")
+            add_button(label="Refresh", callback=update_now_playing, width=100, tag="refresh_button")
+
+            with tooltip("play_button"):
+                add_text("Play/Pause the current song")
+            with tooltip("prev_button"):
+                add_text("Skip to the previous song")
+            with tooltip("next_button"):
+                add_text("Skip to the next song")
+            with tooltip("refresh_button"):
+                add_text("Refresh the UI")
 
         add_spacer(height=15)
 
@@ -521,6 +530,8 @@ def build_gui():
                              width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
 
+        
+
         with collapsing_header(label="Settings"):
             add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
             add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
@@ -534,11 +545,33 @@ def build_gui():
             add_spacer(height=10)
             add_button(label="Update Settings", callback=update_settings_from_menu)
 
+            with tooltip("prefix_input"):
+                add_text("The prefix before a command, useful if you already have another chatbot.")
+                add_text("Can be any number of alphanumerical characters.")
+            with tooltip("queue_input"):
+                add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces.")
+            with tooltip("rate_limit_input"):
+                add_text("How long a user has to wait before they can queue another song, in seconds.")
+            with tooltip("toast_checkbox"):
+                add_text("Whether or not to show desktop notifications when a song is queued.")
+            with tooltip("allowURLs_checkbox"):
+                add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
+            with tooltip("require_membership_checkbox"):
+                add_text("Whether or not users need to be a member of the channel to request a song")
+            with tooltip("require_superchat_checkbox"):
+                add_text("Whether or not users need to send a superchat to request a song")
+            with tooltip("minimum_superchat_input"):
+                add_text("The minimum value superchat (in USD) that a user must spend to request a song.")
+                add_text("Supplementary to 'Require Superchat to request'")
+
 
                 
         add_spacer(height=20)
 
-        add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200)
+        add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200, tag="dark_mode_toggle")
+
+        with tooltip("dark_mode_toggle"):
+            add_text("Toggles dark mode")
 
         add_spacer(height=20)
 
@@ -619,9 +652,33 @@ def show_config_menu(invalid_id=False):
 
         # Quit Button
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
+
+        with tooltip("id_input"):
+            add_text("The ID of your livestream (The 11 characters after 'watch?v=' in the URL)")
+        with tooltip("prefix_input"):
+            add_text("The prefix before a command, useful if you already have another chatbot.")
+            add_text("Can be any number of alphanumerical characters.")
+        with tooltip("queue_input"):
+            add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces.")
+        with tooltip("rate_limit_input"):
+            add_text("How long a user has to wait before they can queue another song, in seconds.")
+        with tooltip("toast_checkbox"):
+            add_text("Whether or not to show desktop notifications when a song is queued.")
+        with tooltip("allowURLs_checkbox"):
+            add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
+        with tooltip("require_membership_checkbox"):
+            add_text("Whether or not users need to be a member of the channel to request a song")
+        with tooltip("require_superchat_checkbox"):
+            add_text("Whether or not users need to send a superchat to request a song")
+        with tooltip("minimum_superchat_input"):
+            add_text("The minimum value superchat (in USD) that a user must spend to request a song.")
+            add_text("Supplementary to 'Require Superchat to request'")
+        with tooltip("dark_mode_checkbox"):
+            add_text("Whether or not the UI will use dark or light mode")
+        
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='Configure LYTE', width=535, height=400)
+    create_viewport(title='Configure LYTE', width=700, height=400)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
