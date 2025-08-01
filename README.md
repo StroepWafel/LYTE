@@ -123,10 +123,10 @@ To find a channel's ID you can use [this site](https://www.tunepocket.com/youtub
 
 # Gallery
 
-Settings UI:
-<img width="676" height="357" alt="image" src="https://github.com/user-attachments/assets/a707cf1d-2b41-4979-af96-5202d3aa583e" />
-Control Panel:
-<img width="681" height="407" alt="image" src="https://github.com/user-attachments/assets/1c4701aa-4d4a-4bf5-be86-15b2e75d0be2" />
+Settings UI:  
+<img width="676" height="407" alt="Settings UI" src="https://github.com/user-attachments/assets/a707cf1d-2b41-4979-af96-5202d3aa583e" />  
+Control Panel:  
+<img width="681" height="407" alt="Control Panel" src="https://github.com/user-attachments/assets/1c4701aa-4d4a-4bf5-be86-15b2e75d0be2" />  
 
 
 # Notes
