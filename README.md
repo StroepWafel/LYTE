@@ -23,7 +23,9 @@ If you make money from the use of or find this program helpful and interesting, 
   - [MINIMUM_SUPERCHAT](#minimum_superchat)
   - [banned_IDs.json](#banned_idsjson)
   - [banned_users.json](#banned_usersjson)
-- [Notes](#notes)  
+- [Gallery](#gallery)
+- [Notes](#notes)
+- [Stars](#stars)
  
 ## Commands
 
@@ -118,6 +120,13 @@ This file is used to store all banned YouTube user Ids. For the time being, you 
 ["name 1", "name 2", "name 3"]
 ```
 To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/)
+
+# Gallery
+
+Settings UI:
+<img width="676" height="357" alt="image" src="https://github.com/user-attachments/assets/a707cf1d-2b41-4979-af96-5202d3aa583e" />
+Control Panel:
+<img width="681" height="407" alt="image" src="https://github.com/user-attachments/assets/1c4701aa-4d4a-4bf5-be86-15b2e75d0be2" />
 
 
 # Notes
