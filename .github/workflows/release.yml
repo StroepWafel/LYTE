@@ -73,12 +73,17 @@ jobs:
           name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
           body: |
             ## What's New:
-            - 
             ### Features:
             - 
             ### Under The Hood:
             - 
-            ### Bugs Squashed:
+            ## Bugs Squashed:
+            - 
+            
+            ## Other Notes:
+            - 
+            
+            ## New Contributors:
             - 
           files: dist/LYTE.exe
           draft: ${{ steps.flags.outputs.draft }}
