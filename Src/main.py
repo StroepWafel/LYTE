@@ -175,9 +175,17 @@ def initialize_chat():
         return False
 
 def load_config():
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, BANNED_IDS, BANNED_USERS
+
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
+        
+    with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
+        BANNED_IDS = json.load(f)
+
+    with open(BANNED_USERS_PATH, 'r', encoding="utf-8") as f:
+        BANNED_USERS = json.load(f)
+
     YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
     RATE_LIMIT_SECONDS = config.get("RATE_LIMIT_SECONDS", 10)
     TOAST_NOTIFICATIONS = config.get("TOAST_NOTIFICATIONS", "True").lower() == "true"
@@ -188,6 +196,9 @@ def load_config():
     REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
     REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
     MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
+    BANNED_IDS = bannedIDs
+    BANNED_USERS = bannedUsers
+
 
 
 def quit_program():
@@ -303,34 +314,38 @@ def get_direct_url(youtube_url):
         info = ydl.extract_info(youtube_url, download=False)
         return info['url']
 
-def queue_song(youtube_url, requester):
+def queue_song(youtube_url, requester, requesterUUID):
     try:
         direct_url = get_direct_url(youtube_url)
         media = instance.media_new(direct_url)
         title = get_video_title(youtube_url)
         media.set_meta(vlc.Meta.Title, title)
         media_list.add_media(media)
-        logging.info(f"Queued: {youtube_url} as {title}. Requested by {requester}")
+        logging.info(f"Queued: {youtube_url} as {title}. Requested by {requester}, UUID: {requesterUUID}")
         if player.get_state() != vlc.State.Playing:
             player.play()
     except Exception as e:
         logging.warning(f"Error queuing song {youtube_url}: {e}")
 
 def on_chat_message(chat_message):
-    try:
-        username = chat_message.author.name
-        channelid = chat_message.author.channelId
-        userismember = chat_message.author.isChatSponsor
-        issuperchat = chat_message.type == "superChat"
-        superchatvalue = 0
+    global BANNED_USERS, BANNED_IDS
+    message = chat_message.message
 
-        if issuperchat:
-            superchatvalue = convert_to_usd(chat_message.amountValue, chat_message.currency) 
+    if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
+        try:
+            username = chat_message.author.name
+            channelid = chat_message.author.channelId
+            userismember = chat_message.author.isChatSponsor
+            issuperchat = chat_message.type == "superChat"
+            superchatvalue = 0
 
-        message = chat_message.message
-        current_time = time.time()
+            if issuperchat:
+                superchatvalue = convert_to_usd(chat_message.amountValue, chat_message.currency) 
 
-        if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
+
+            current_time = time.time()
+
+
             parts = message.split()
             if not len(parts) == 2:
                 return
@@ -338,6 +353,7 @@ def on_chat_message(chat_message):
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
             if video_id in BANNED_IDS or channelid in BANNED_USERS:
+                logging.info("Blocked user NIDHU (UCfUEZtzFsgqgQKGZLnrNy6A) from queuing — user or video is banned.")
                 return
             if 'watch?v=' in video_id:
                 if ALLOW_URLS:
@@ -354,12 +370,12 @@ def on_chat_message(chat_message):
                 logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
-            queue_song("https://www.youtube.com/watch?v=" + video_id, username)
+            queue_song("https://www.youtube.com/watch?v=" + video_id, username, channelid)
             show_toast(video_id, username)
             update_now_playing()
             user_last_command[username] = current_time
-    except Exception as e:
-        logging.error("Chat message error: %s", e)
+        except Exception as e:
+            logging.error("Chat message error: %s", e)
     
 def update_now_playing():
     media = player.get_media_player().get_media()
@@ -513,7 +529,7 @@ def build_gui():
             with tooltip("next_button"):
                 add_text("Skip to the next song")
             with tooltip("refresh_button"):
-                add_text("Refresh the UI")
+                add_text("Refresh the song info")
 
         add_spacer(height=15)
 
@@ -530,7 +546,10 @@ def build_gui():
                              width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
 
-        
+        add_button(label="Reload config", callback=load_config, width=120, tag="reload_config")
+        with tooltip("reload_config"):
+                add_text("Reloads the current config from the file")
+
 
         with collapsing_header(label="Settings"):
             add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
@@ -546,14 +565,14 @@ def build_gui():
             add_button(label="Update Settings", callback=update_settings_from_menu)
 
             with tooltip("prefix_input"):
-                add_text("The prefix before a command, useful if you already have another chatbot.")
-                add_text("Can be any number of alphanumerical characters.")
+                add_text("The prefix before a command, useful if you already have another chatbot")
+                add_text("Can be any number of alphanumerical characters")
             with tooltip("queue_input"):
-                add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces.")
+                add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces")
             with tooltip("rate_limit_input"):
-                add_text("How long a user has to wait before they can queue another song, in seconds.")
+                add_text("How long a user has to wait before they can queue another song, in seconds")
             with tooltip("toast_checkbox"):
-                add_text("Whether or not to show desktop notifications when a song is queued.")
+                add_text("Whether or not to show desktop notifications when a song is queued")
             with tooltip("allowURLs_checkbox"):
                 add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
             with tooltip("require_membership_checkbox"):
@@ -561,7 +580,7 @@ def build_gui():
             with tooltip("require_superchat_checkbox"):
                 add_text("Whether or not users need to send a superchat to request a song")
             with tooltip("minimum_superchat_input"):
-                add_text("The minimum value superchat (in USD) that a user must spend to request a song.")
+                add_text("The minimum value superchat (in USD) that a user must spend to request a song")
                 add_text("Supplementary to 'Require Superchat to request'")
 
 
@@ -656,14 +675,14 @@ def show_config_menu(invalid_id=False):
         with tooltip("id_input"):
             add_text("The ID of your livestream (The 11 characters after 'watch?v=' in the URL)")
         with tooltip("prefix_input"):
-            add_text("The prefix before a command, useful if you already have another chatbot.")
-            add_text("Can be any number of alphanumerical characters.")
+            add_text("The prefix before a command, useful if you already have another chatbot")
+            add_text("Can be any number of alphanumerical characters")
         with tooltip("queue_input"):
-            add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces.")
+            add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces")
         with tooltip("rate_limit_input"):
-            add_text("How long a user has to wait before they can queue another song, in seconds.")
+            add_text("How long a user has to wait before they can queue another song, in seconds")
         with tooltip("toast_checkbox"):
-            add_text("Whether or not to show desktop notifications when a song is queued.")
+            add_text("Whether or not to show desktop notifications when a song is queued")
         with tooltip("allowURLs_checkbox"):
             add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
         with tooltip("require_membership_checkbox"):
@@ -671,7 +690,7 @@ def show_config_menu(invalid_id=False):
         with tooltip("require_superchat_checkbox"):
             add_text("Whether or not users need to send a superchat to request a song")
         with tooltip("minimum_superchat_input"):
-            add_text("The minimum value superchat (in USD) that a user must spend to request a song.")
+            add_text("The minimum value superchat (in USD) that a user must spend to request a song")
             add_text("Supplementary to 'Require Superchat to request'")
         with tooltip("dark_mode_checkbox"):
             add_text("Whether or not the UI will use dark or light mode")
