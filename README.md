@@ -119,7 +119,7 @@ This file is used to store all banned YouTube user Ids. For the time being, you 
 ```JSON
 ["name 1", "name 2", "name 3"]
 ```
-To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/)
+To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/) or look in the logs
 
 # Gallery
 
