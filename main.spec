@@ -1,29 +1,28 @@
 import dearpygui
 import os
-from PyInstaller.utils.hooks import collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_dynamic_libs collect_all
 
 # Collect all dearpygui DLLs and binaries
-dearpygui_binaries = collect_dynamic_libs('dearpygui')
+datas, binaries, hiddenimports = collect_all('dearpygui')
 
 added_files = [
     ('src/icons/', 'icons'),
 ]
 
-# Add dearpygui DLLs to binaries
-binaries = dearpygui_binaries
+# Combine your added files with dearpygui's data and binaries
+datas += added_files
 
 a = Analysis(
     ['src\\main.py'],
     pathex=[],
     binaries=binaries,
-    datas=added_files,
-    hiddenimports=[
+    datas=datas,
+    hiddenimports=hiddenimports + [
         'plyer.platforms.win.notification',
         'plyer.platforms.linux.notification',
         'plyer.platforms.darwin.notification'
     ],
     hookspath=[],
-    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
