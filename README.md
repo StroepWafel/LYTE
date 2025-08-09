@@ -10,6 +10,7 @@ If you make money from the use of or find this program helpful and interesting, 
 - [Commands](#commands)
   - [!queue](#queue)
 - [Setup](#setup)
+  - [Quick Installer](#quick-installer)
 - [Config Documentation](#config-documentation)
   - [YOUTUBE_VIDEO_ID](#youtube_video_id)
   - [RATE_LIMIT_SECONDS](#rate_limit_seconds)  
@@ -41,11 +42,19 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 
 ## Setup
 
+### Quick Installer:
+1. Download [LYTE_INSTALLER](https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/latest/download/LYTE_Installer.zip) and extract the folder (Installer source files can be found [here](https://github.com/StroepWafel/LYTE-NSIS-Installer))
+2. Run LYTE_Installer.exe and follow the prompts
+3. The program can also be uninstalled easily through this method
+
 ### EXE installation:
 1. Download and extract the [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release)'s .exe file to any folder on your computer (this is because the .exe will create files upon execution)
 2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip` in the terminal; this will both make sure pip is correctly installed and that it is up-to-date
-4. Run the `LYTE.exe` file located in whatever folder you saved the release to.
+4. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately. **MAKE SURE TO USE THE SAME ARCHITECTURE AS YOUR PYTHON INSTALL**
+> [!IMPORTANT]
+> VLC's architecture MUST be the same as python (often x64), to install x64 VLC, on the downloads page click the arrow on the right of `Download VLC` and select `Windows 64bit`
+5. Run the `LYTE.exe` file located in whatever folder you saved the release to.
 > [!IMPORTANT]  
 > If you are using Windows, a pop-up may appear stating that "Windows Protected Your PC." If you trust this program, click "More info" then "Run anyway"
 5. In the window that opened, change `LIVESTREAM_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `?v=`)
@@ -60,7 +69,9 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip`; this will both make sure pip is correctly installed and that it is up-to-date
 4. Install the required Python libraries (found in Src/requirements.txt) using pip (normally included in Python)
-5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately. **MAKE SURE TO USE THE SAME ARCHITECTURE AS YOUR PYTHON INSTALL**
+5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately.
+> [!IMPORTANT]
+> VLC's architecture MUST be the same as python (often x64), to install x64 VLC, on the downloads page click the arrow on the right of `Download VLC` and select `Windows 64bit`
 6. Run main.py in the src folder:\
 For Windows:
     - Press Win+r to open the run dialogue
