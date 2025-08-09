@@ -13,6 +13,7 @@ If you make money from the use of or find this program helpful and interesting, 
   - [Quick Installer](#quick-installer)
   - [EXE Installation](#exe-installation)
   - [Python file Installation](#python-file-installation)
+- [Temporarily Disabling real-time protection](#temporarily-disabling-real-time-protection)
 - [Config Documentation](#config-documentation)
   - [YOUTUBE_VIDEO_ID](#youtube_video_id)
   - [RATE_LIMIT_SECONDS](#rate_limit_seconds)  
@@ -46,6 +47,8 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 
 ### Quick Installer:
 1. Download [LYTE_Installer](https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/latest/download/LYTE_Installer.zip) and extract the folder (Installer source files can be found [here](https://github.com/StroepWafel/LYTE-NSIS-Installer))
+> [!IMPORTANT]  
+> Windows does not like this file for some reason, so you will have to either [temporarily disable Real-time protection](#temporarily-disabling-real-time-protection) or use firefox to install it for the time being.
 2. Run LYTE_Installer.exe and follow the prompts
 3. The program can also be uninstalled easily through this method
 
@@ -87,7 +90,23 @@ For Windows:
 10. A separate window will open, here you can play/pause, skip the song or go back, refresh the UI, change the volume, or scrub through the song. You can also open the settings tab to edit the settings while the program is running and you can toggle the light or dark mode.
 11. If you want to quit the program, please use the `Quit` button; otherwise, the program may not close correctly,y and you will have to close the terminal manually.
 
+## Temporarily Disabling real-time protection
+### For Windows 10:
+1. Press Windows + S to open Search, type Windows Security in the text field, and click on the relevant result.
+2. Click on Virus & threat protection.
+3. Click on Manage settings under Virus & threat protection settings.
+4. Disable the toggle under Real-time protection.
+5. Confirm the action if prompted by User Account Control (UAC).
+6. Re-enable the toggle under Real-time protection once the file has downloaded.
 
+### For Windows 11:
+1. Press Windows + I to open Settings.
+2. Go to Privacy & Security > Windows Security.
+3. Click on Virus & threat protection.
+4. Under Virus & threat protection settings, click Manage settings.
+5. Toggle Real-time protection to Off.
+6. Confirm the action if prompted by User Account Control (UAC).
+7. Re-enable the toggle under Real-time protection once the file has downloaded.
 
 ## Config Documentation
 
