@@ -45,7 +45,7 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 ## Setup
 
 ### Quick Installer:
-1. Download [LYTE_INSTALLER](https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/latest/download/LYTE_Installer.zip) and extract the folder (Installer source files can be found [here](https://github.com/StroepWafel/LYTE-NSIS-Installer))
+1. Download [LYTE_Installer](https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/latest/download/LYTE_Installer.zip) and extract the folder (Installer source files can be found [here](https://github.com/StroepWafel/LYTE-NSIS-Installer))
 2. Run LYTE_Installer.exe and follow the prompts
 3. The program can also be uninstalled easily through this method
 
