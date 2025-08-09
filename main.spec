@@ -1,19 +1,26 @@
-# -*- mode: python ; coding: utf-8 -*-
+import dearpygui
+import os
+from PyInstaller.utils.hooks import collect_dynamic_libs
 
+# Collect all dearpygui DLLs and binaries
+dearpygui_binaries = collect_dynamic_libs('dearpygui')
 
 added_files = [
-         ( 'src/icons/', 'icons' ),
-         
-         ]
+    ('src/icons/', 'icons'),
+]
+
+# Add dearpygui DLLs to binaries
+binaries = dearpygui_binaries
+
 a = Analysis(
     ['src\\main.py'],
     pathex=[],
-    binaries=[],
+    binaries=binaries,
     datas=added_files,
     hiddenimports=[
-    'plyer.platforms.win.notification',
-    'plyer.platforms.linux.notification',
-    'plyer.platforms.darwin.notification'
+        'plyer.platforms.win.notification',
+        'plyer.platforms.linux.notification',
+        'plyer.platforms.darwin.notification'
     ],
     hookspath=[],
     hooksconfig={},
