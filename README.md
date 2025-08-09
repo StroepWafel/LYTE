@@ -97,7 +97,7 @@ For Windows:
 3. Click on Manage settings under Virus & threat protection settings.
 4. Disable the toggle under Real-time protection.
 5. Confirm the action if prompted by User Account Control (UAC).
-6. Re-enable the toggle under Real-time protection once the file has downloaded.
+6. Re-enable the toggle under Real-time protection once you have finished installing.
 
 ### For Windows 11:
 1. Press Windows + I to open Settings.
@@ -106,7 +106,7 @@ For Windows:
 4. Under Virus & threat protection settings, click Manage settings.
 5. Toggle Real-time protection to Off.
 6. Confirm the action if prompted by User Account Control (UAC).
-7. Re-enable the toggle under Real-time protection once the file has downloaded.
+7. Re-enable the toggle under Real-time protection once you have finished installing.
 
 ## Config Documentation
 
