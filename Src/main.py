@@ -353,7 +353,7 @@ def on_chat_message(chat_message):
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
             if video_id in BANNED_IDS or channelid in BANNED_USERS:
-                logging.info("Blocked user NIDHU (UCfUEZtzFsgqgQKGZLnrNy6A) from queuing — user or video is banned.")
+                logging.info(f"Blocked user {username} ({channelid}) from queuing — user or video is banned.")
                 return
             if 'watch?v=' in video_id:
                 if ALLOW_URLS:
