@@ -169,3 +169,7 @@ Control Panel:
 ## Stars
 
 [![Star History Chart](https://api.star-history.com/svg?repos=StroepWafel/LYTE&type=Date)](https://www.star-history.com/#StroepWafel/LYTE&Date)
+
+## Code signing policy
+Free code signing provided by SignPath.io, certificate by SignPath Foundation
+
