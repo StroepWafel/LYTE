@@ -369,6 +369,7 @@ def on_chat_message(chat_message):
             video_id = parts[1]
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
+
             if any(video_id == x["id"] for x in BANNED_IDS) or any(channelid == x["id"] for x in BANNED_USERS):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user or video is banned)")
                 return

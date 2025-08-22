@@ -10,6 +10,10 @@ If you make money from the use of or find this program helpful and interesting, 
 - [Commands](#commands)
   - [!queue](#queue)
 - [Setup](#setup)
+  - [Quick Installer](#quick-installer)
+  - [EXE Installation](#exe-installation)
+  - [Python file Installation](#python-file-installation)
+- [Temporarily Disabling real-time protection](#temporarily-disabling-real-time-protection)
 - [Config Documentation](#config-documentation)
   - [YOUTUBE_VIDEO_ID](#youtube_video_id)
   - [RATE_LIMIT_SECONDS](#rate_limit_seconds)  
@@ -23,7 +27,9 @@ If you make money from the use of or find this program helpful and interesting, 
   - [MINIMUM_SUPERCHAT](#minimum_superchat)
   - [banned_IDs.json](#banned_idsjson)
   - [banned_users.json](#banned_usersjson)
-- [Notes](#notes)  
+- [Gallery](#gallery)
+- [Notes](#notes)
+- [Stars](#stars)
  
 ## Commands
 
@@ -39,11 +45,21 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 
 ## Setup
 
-### EXE installation:
+### Quick Installer:
+1. Download [LYTE_Installer](https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/latest/download/LYTE_Installer.zip) and extract the folder (Installer source files can be found [here](https://github.com/StroepWafel/LYTE-NSIS-Installer), you can even download from the action if you dont trust the release)
+> [!IMPORTANT]  
+> Windows does not like this file for some reason, so you will have to [temporarily disable Real-time protection](#temporarily-disabling-real-time-protection) for the time being.
+2. Run LYTE_Installer.exe and follow the prompts
+3. The program can also be uninstalled easily through this method
+
+### EXE Installation:
 1. Download and extract the [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release)'s .exe file to any folder on your computer (this is because the .exe will create files upon execution)
 2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip` in the terminal; this will both make sure pip is correctly installed and that it is up-to-date
-4. Run the `LYTE.exe` file located in whatever folder you saved the release to.
+4. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately. **MAKE SURE TO USE THE SAME ARCHITECTURE AS YOUR PYTHON INSTALL**
+> [!WARNING]
+> VLC's architecture MUST be the same as python (often x64), to install x64 VLC, on the downloads page click the arrow on the right of `Download VLC` and select `Windows 64bit`
+5. Run the `LYTE.exe` file located in whatever folder you saved the release to.
 > [!IMPORTANT]  
 > If you are using Windows, a pop-up may appear stating that "Windows Protected Your PC." If you trust this program, click "More info" then "Run anyway"
 5. In the window that opened, change `LIVESTREAM_ID` to the ID of your live stream (Ie, the characters at the end of the URL, after the `?v=`)
@@ -53,12 +69,14 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 9. If you want to quit the program, please use the `Quit` button; otherwise, the program may not close correctly, and you will have to close the terminal manually.
 
 
-### Python file installation:
+### Python file Installation:
 1. Download and extract the source to any folder on your computer (clone repo or download [latest release](https://github.com/NIDNHU/YTLM/releases/tag/release) source code)
 2. If not installed already, install [Python](https://www.python.org/downloads/). During installation, please make sure the box at the bottom labelled "add Python.exe to PATH" is ticked
 3. Check whether pip was added to Path correctly by running `pip install --upgrade pip`; this will both make sure pip is correctly installed and that it is up-to-date
 4. Install the required Python libraries (found in Src/requirements.txt) using pip (normally included in Python)
-5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately. **MAKE SURE TO USE THE SAME ARCHITECTURE AS YOUR PYTHON INSTALL**
+5. Install [VLC](https://www.videolan.org/vlc/) for your computer appropiately.
+> [!WARNING]
+> VLC's architecture MUST be the same as python (often x64), to install x64 VLC, on the downloads page click the arrow on the right of `Download VLC` and select `Windows 64bit`
 6. Run main.py in the src folder:\
 For Windows:
     - Press Win+r to open the run dialogue
@@ -72,7 +90,23 @@ For Windows:
 10. A separate window will open, here you can play/pause, skip the song or go back, refresh the UI, change the volume, or scrub through the song. You can also open the settings tab to edit the settings while the program is running and you can toggle the light or dark mode.
 11. If you want to quit the program, please use the `Quit` button; otherwise, the program may not close correctly,y and you will have to close the terminal manually.
 
+## Temporarily Disabling real-time protection
+### For Windows 10:
+1. Press Windows + S to open Search, type Windows Security in the text field, and click on the relevant result.
+2. Click on Virus & threat protection.
+3. Click on Manage settings under Virus & threat protection settings.
+4. Disable the toggle under Real-time protection.
+5. Confirm the action if prompted by User Account Control (UAC).
+6. Re-enable the toggle under Real-time protection once you have finished installing.
 
+### For Windows 11:
+1. Press Windows + I to open Settings.
+2. Go to Privacy & Security > Windows Security.
+3. Click on Virus & threat protection.
+4. Under Virus & threat protection settings, click Manage settings.
+5. Toggle Real-time protection to Off.
+6. Confirm the action if prompted by User Account Control (UAC).
+7. Re-enable the toggle under Real-time protection once you have finished installing.
 
 ## Config Documentation
 
@@ -117,7 +151,14 @@ This file is used to store all banned YouTube user Ids. For the time being, you 
 ```JSON
 ["name 1", "name 2", "name 3"]
 ```
-To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/)
+To find a channel's ID you can use [this site](https://www.tunepocket.com/youtube-channel-id-finder/) or look in the logs
+
+# Gallery
+
+Settings UI:  
+<img width="676" height="407" alt="Settings UI" src="https://github.com/user-attachments/assets/a707cf1d-2b41-4979-af96-5202d3aa583e" />  
+Control Panel:  
+<img width="681" height="407" alt="Control Panel" src="https://github.com/user-attachments/assets/1c4701aa-4d4a-4bf5-be86-15b2e75d0be2" />  
 
 
 # Notes
