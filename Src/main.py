@@ -50,6 +50,9 @@ should_exit = False
 
 # ---------------------- Setup/Import Configuration ----------------------
 
+BANNED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
+BANNED_IDS: list[dict] = []  # {"id": "xxxxxx", "name": "VideoName"}
+
 def ensure_file_exists(filepath, default_content):
     if not os.path.isfile(filepath):
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -131,9 +134,10 @@ ensure_json_valid(CONFIG_PATH, default_config)
 with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
     config = json.load(f)
 with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
-    bannedIDs = json.load(f)
-with open(BANNED_USERS_PATH, 'r', encoding="utf-8") as f:
-    bannedUsers = json.load(f)
+    BANNED_IDS = json.load(f)
+with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
+    BANNED_USERS = json.load(f)
+
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
 RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 3000)
@@ -146,8 +150,6 @@ ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
 REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
 REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
 MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
-BANNED_IDS = bannedIDs
-BANNED_USERS = bannedUsers
 user_last_command = defaultdict(lambda: 0)
 config_success = False
 # ---------------------- VLC Setup ----------------------
@@ -161,6 +163,23 @@ player.get_media_player().audio_set_volume(player.get_media_player().audio_get_v
 logging.info("Started VLC...")
 
 # ---------------------- Functions ----------------------
+
+def load_banned_users():
+    global BANNED_USERS
+    if os.path.exists(BANNED_USERS_PATH):
+        with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
+            BANNED_USERS = json.load(f)
+    else:
+        BANNED_USERS = []
+
+def load_banned_ids():
+    global BANNED_IDS
+    if os.path.exists(BANNED_IDS_PATH):
+        with open(BANNED_IDS_PATH, "r", encoding="utf-8") as f:
+            BANNED_IDS = json.load(f)
+    else:
+        BANNED_IDS = []
+
 def on_close_attempt(sender, data):
     print("Program closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
 
@@ -196,8 +215,6 @@ def load_config():
     REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
     REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
     MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
-    BANNED_IDS = bannedIDs
-    BANNED_USERS = bannedUsers
 
 
 
@@ -290,7 +307,7 @@ def show_toast(video_id, username):
     if TOAST_NOTIFICATIONS:
         notification.notify(
             title="Requested by: " + username,
-            message="Adding '" + get_video_name(video_id) + "' to queue",
+            message="Adding '" + get_video_name_fromID(video_id) + "' to queue",
             timeout=5
         )
 
@@ -300,7 +317,7 @@ def get_video_title(youtube_url):
         info = ydl.extract_info(youtube_url, download=False)
         return info['title']
 
-def get_video_name(video_id):
+def get_video_name_fromID(video_id):
     url = f"https://www.youtube.com/watch?v={video_id}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
@@ -352,9 +369,10 @@ def on_chat_message(chat_message):
             video_id = parts[1]
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
-            if video_id in BANNED_IDS or channelid in BANNED_USERS:
-                logging.info("Blocked user NIDHU (UCfUEZtzFsgqgQKGZLnrNy6A) from queuing — user or video is banned.")
+            if any(video_id == x["id"] for x in BANNED_IDS) or any(channelid == x["id"] for x in BANNED_USERS):
+                logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user or video is banned)")
                 return
+            
             if 'watch?v=' in video_id:
                 if ALLOW_URLS:
                     video_id = video_id.split('watch?v=', 1)[1]
@@ -394,6 +412,106 @@ def convert_to_usd(value = 1, currency_name = "USD"):
     usd_value = converter.convert(currency_name, 'USD', value)
     return usd_value
 
+def fetch_channel_name(channel_id: str) -> str:
+    url = f"https://www.youtube.com/channel/{channel_id}"
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return info.get("uploader", "Unknown Channel")
+
+def refresh_banned_users_list():
+    configure_item("banned_users_list",
+                   items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS])
+
+def save_banned_users():
+    with open(BANNED_USERS_PATH, "w", encoding="utf-8") as f:
+        json.dump(BANNED_USERS, f, indent=4)
+
+def ban_user_callback():
+    global BANNED_USERS
+    user_to_ban = get_value("ban_user_input").strip()
+    if user_to_ban and all(u["id"] != user_to_ban for u in BANNED_USERS):
+        # Add immediately with placeholder
+        BANNED_USERS.append({"id": user_to_ban, "name": "Loading..."})
+        save_banned_users()
+        refresh_banned_users_list()
+        set_value("ban_user_input", "")  # clear input
+
+        # Fetch in background
+        def fetch_and_update():
+            try:
+                real_name = fetch_channel_name(user_to_ban)
+                # Update the entry in BANNED_USERS
+                for u in BANNED_USERS:
+                    if u["id"] == user_to_ban:
+                        u["name"] = real_name
+                        break
+                save_banned_users()
+                # Update the listbox in the GUI thread
+                refresh_banned_users_list()
+            except Exception as e:
+                logging.error(f"Error fetching channel name for {user_to_ban}: {e}")
+
+        threading.Thread(target=fetch_and_update, daemon=True).start()
+
+
+def unban_user_callback():
+    global BANNED_USERS
+    selected = get_value("banned_users_list")
+    if selected:
+        # Extract ID from "Name (ID)"
+        selected_id = selected.split("(")[-1].strip(")")
+        BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
+        save_banned_users()
+        refresh_banned_users_list()
+
+def fetch_video_name(video_id: str) -> str:
+    return(get_video_name_fromID(video_id))
+
+def refresh_banned_ids_list():
+    configure_item("banned_ids_list",
+                   items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS])
+    
+def save_banned_ids():
+    with open(BANNED_IDS_PATH, "w", encoding="utf-8") as f:
+        json.dump(BANNED_IDS, f, indent=4)
+
+def ban_id_callback():
+    global BANNED_IDS
+    id_to_ban = get_value("ban_id_input").strip()
+    if id_to_ban and all(u["id"] != id_to_ban for u in BANNED_IDS):
+        # Add immediately with placeholder
+        BANNED_IDS.append({"id": id_to_ban, "name": "Loading..."})
+        save_banned_ids()
+        refresh_banned_ids_list()
+        set_value("ban_id_input", "")  # clear input
+
+        # Fetch in background
+        def fetch_and_update():
+            try:
+                real_name = fetch_video_name(id_to_ban)
+                # Update the entry in BANNED_USERS
+                for u in BANNED_IDS:
+                    if u["id"] == id_to_ban:
+                        u["name"] = real_name
+                        break
+                save_banned_ids()
+                # Update the listbox in the GUI thread
+                refresh_banned_ids_list()
+            except Exception as e:
+                logging.error(f"Error fetching channel name for {id_to_ban}: {e}")
+
+        threading.Thread(target=fetch_and_update, daemon=True).start()
+
+def unban_id_callback():
+    global BANNED_IDS
+    selected = get_value("banned_ids_list")
+    if selected:
+        # Extract ID from "Name (ID)"
+        selected_id = selected.split("(")[-1].strip(")")
+        BANNED_IDS = [u for u in BANNED_IDS if u["id"] != selected_id]
+        save_banned_ids()
+        refresh_banned_ids_list()
 # ---------------------- GUI ----------------------
 create_context()
 now_playing_text = None
@@ -551,6 +669,12 @@ def build_gui():
                 add_text("Reloads the current config from the file")
 
 
+        with group(horizontal=True):
+            add_button(label="Manage Banned Users", callback=lambda: (load_banned_users(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
+            add_button(label="Manage Banned Videos", callback=lambda: (load_banned_ids(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
+
+
+
         with collapsing_header(label="Settings"):
             add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
             add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
@@ -597,9 +721,72 @@ def build_gui():
         # Quit Button
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
 
+        add_input_text(label="", tag="console_text", multiline=True, readonly=True, height=200, width=1300)
+        
+        class GuiLogger(logging.Handler):
+            def emit(self, record):
+                try:
+                    msg = self.format(record)
+                    if does_item_exist("console_text"):
+                        current_text = get_value("console_text")
+                        # Keep last 100 lines max
+                        lines = current_text.splitlines()
+                        lines.append(msg)
+                        if len(lines) > 100:
+                            lines = lines[-100:]
+                        set_value("console_text", "\n".join(lines))
+                except Exception:
+                    pass
+
+        gui_handler = GuiLogger()
+        gui_handler.setLevel(logging.INFO)
+        gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logging.getLogger().addHandler(gui_handler)
+
+        with window(label="Banned Users", tag="BannedUsersWindow", show=False, width=400, height=400):
+            add_text("Manage Banned Users")
+            add_separator()
+
+            # List banned users
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS], tag="banned_users_list", width=350, num_items=8)
+            add_spacer(height=10)
+
+            # Input for adding user
+            add_input_text(label="Add User ID", tag="ban_user_input", width=250)
+            add_button(label="Ban User", callback=lambda: ban_user_callback())
+
+            add_spacer(height=10)
+
+            # Remove selected user
+            add_button(label="Unban Selected", callback=lambda: unban_user_callback())
+
+            add_spacer(height=20)
+            add_button(label="Close", callback=lambda: configure_item("BannedUsersWindow", show=False))
+
+
+        with window(label="Banned IDs", tag="BannedIDsWindow", show=False, width=400, height=400):
+            add_text("Manage Banned IDs")
+            add_separator()
+
+            # List banned users
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS], tag="banned_ids_list", width=350, num_items=8)
+            add_spacer(height=10)
+
+            # Input for adding user
+            add_input_text(label="Add Video ID", tag="ban_id_input", width=250)
+            add_button(label="Ban Video", callback=lambda: ban_id_callback())
+
+            add_spacer(height=10)
+
+            # Remove selected user
+            add_button(label="Unban Selected", callback=lambda: unban_id_callback())
+
+            add_spacer(height=20)
+            add_button(label="Close", callback=lambda: configure_item("BannedIDsWindow", show=False))
+
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='LYTE Control Panel', width=700, height=450)
+    create_viewport(title='LYTE Control Panel', width=1330, height=750)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
