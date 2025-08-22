@@ -319,11 +319,7 @@ def get_video_title(youtube_url):
 
 def get_video_name_fromID(video_id):
     url = f"https://www.youtube.com/watch?v={video_id}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
-    match = re.search(r'<title>(.*?)</title>', response.text)
-    if match:
-        return match.group(1).replace(" - YouTube", "").strip()
+    return(get_video_title(url))
 
 def get_direct_url(youtube_url):
     ydl_opts = {'format': 'bestaudio'}
