@@ -17,8 +17,8 @@ jobs:
 
     - name: Copy inetc plugin DLLs
       run: |
-        copy plugins\x86-ansi\inetc.dll "C:\Program Files (x86)\NSIS\Plugins\x86-ansi\inetc.dll"
-        copy plugins\x86-unicode\inetc.dll "C:\Program Files (x86)\NSIS\Plugins\x86-unicode\inetc.dll"
+        copy     NSIS-Installer\plugins\x86-ansi\inetc.dll "C:\Program Files (x86)\NSIS\Plugins\x86-ansi\inetc.dll"
+        copy     NSIS-Installer\plugins\x86-unicode\inetc.dll "C:\Program Files (x86)\NSIS\Plugins\x86-unicode\inetc.dll"
 
     - name: Compile NSIS installer
       run: makensis LYTEInstaller.nsi
