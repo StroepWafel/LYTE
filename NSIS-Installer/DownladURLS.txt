@@ -1,0 +1,9 @@
+Python: https://www.python.org/ftp/python/3.13.6/python-3.13.6-amd64.exe
+VLC: mirror.aarnet.edu.au/pub/videolan/vlc/3.0.21/win64/vlc-3.0.21-win64.exe
+LYTE: https://github.com/StroepWafel/LYTE/releases/latest/download/LYTE.exe
+Microsoft Visual C++ Redistributable: https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+
+
+Uses NSIS: https://nsis.sourceforge.io/Download
+and inetc: https://nsis.sourceforge.io/Inetc_plug-in
