@@ -96,12 +96,12 @@ def ensure_json_valid(filepath, default_content):
             backup_path = f"{filepath}.backup_{timestamp}.json"
             with open(backup_path, 'w', encoding='utf-8') as backup_file:
                 json.dump(data, backup_file, indent=4)
-            logging.info(f"Backed up original file to {backup_path}")
+            logging.info(f"Backed up original config file to {backup_path}")
 
             # Write cleaned data
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(cleaned_data, f, indent=4)
-            logging.info(f"Cleaned and updated {filepath}")
+            logging.info(f"Successfully cleaned and updated {filepath}")
 
     except Exception as e:
         logging.error(f"Error validating JSON file {filepath}: {e}")
@@ -110,6 +110,8 @@ def ensure_json_valid(filepath, default_content):
 CONFIG_PATH = os.path.join(APP_FOLDER, 'config.json')
 BANNED_IDS_PATH = os.path.join(APP_FOLDER, 'banned_IDs.json')
 BANNED_USERS_PATH = os.path.join(APP_FOLDER, 'banned_users.json')
+WHITELISTED_IDS_PATH = os.path.join(APP_FOLDER, 'whitelisted_IDs.json')
+WHITELISTED_USERS_PATH = os.path.join(APP_FOLDER, 'whitelisted_users.json')
 
 default_config = {
     "YOUTUBE_VIDEO_ID": "LIVESTREAM_ID",
@@ -117,17 +119,22 @@ default_config = {
     "TOAST_NOTIFICATIONS": "True",
     "PREFIX": "!",
     "QUEUE_COMMAND": "queue",
-    "VOLUME": 25,
+    "VOLUME": 50,
     "DARK_MODE": "True",
     "ALLOW_URLS": "False",
     "REQUIRE_MEMBERSHIP": "False",
     "REQUIRE_SUPERCHAT": "False",
-    "MINIMUM_SUPERCHAT": 3
+    "MINIMUM_SUPERCHAT": 3,
+    "ENFORCE_ID_WHITELIST": "False",
+    "ENFORCE_USER_WHITELIST": "False",
+    "AUTOREMOVE_SONGS": "True"
 }
 
 ensure_file_exists(CONFIG_PATH, default_config)
 ensure_file_exists(BANNED_IDS_PATH, [])
 ensure_file_exists(BANNED_USERS_PATH, [])
+ensure_file_exists(WHITELISTED_IDS_PATH, [])
+ensure_file_exists(WHITELISTED_USERS_PATH, [])
 
 ensure_json_valid(CONFIG_PATH, default_config)
 
@@ -137,6 +144,10 @@ with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
     BANNED_IDS = json.load(f)
 with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
     BANNED_USERS = json.load(f)
+with open(WHITELISTED_IDS_PATH, 'r', encoding="utf-8") as f:
+    WHITELISTED_IDS = json.load(f)
+with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
+    WHITELISTED_USERS = json.load(f)
 
 
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
@@ -150,16 +161,37 @@ ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
 REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
 REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
 MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
+ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
+ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
+AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
+
 user_last_command = defaultdict(lambda: 0)
 config_success = False
 # ---------------------- VLC Setup ----------------------
+
+def on_next_item(event):
+    if (AUTOREMOVE_SONGS):
+        try:
+            # Always remove the first item (the one that just finished)
+            if media_list.count() > 1:
+                media_list.lock()
+                media_list.remove_index(0)
+                media_list.unlock()
+                logging.info("Removed finished song from queue")
+            if media_list.count() == 0:
+                logging.info("Queue empty - stopping player")
+                player.stop()
+        except Exception as e:
+            logging.error(f"Error removing finished song: {e}")
 
 instance = vlc.Instance("--one-instance")
 player = instance.media_list_player_new()
 media_list = instance.media_list_new()
 player.set_media_list(media_list)
 player.play()
-player.get_media_player().audio_set_volume(player.get_media_player().audio_get_volume())
+player.get_media_player().audio_set_volume(VOLUME)
+event_manager = player.event_manager()
+event_manager.event_attach(vlc.EventType.MediaListPlayerNextItemSet, on_next_item)
 logging.info("Started VLC...")
 
 # ---------------------- Functions ----------------------
@@ -180,6 +212,22 @@ def load_banned_ids():
     else:
         BANNED_IDS = []
 
+def load_whitelisted_users():
+    global WHITELISTED_USERS
+    if os.path.exists(WHITELISTED_USERS_PATH):
+        with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
+            WHITELISTED_USERS = json.load(f)
+    else:
+        WHITELISTED_USERS = []
+
+def load_whitelisted_ids():
+    global WHITELISTED_IDS
+    if os.path.exists(WHITELISTED_IDS_PATH):
+        with open(WHITELISTED_IDS_PATH, "r", encoding="utf-8") as f:
+            WHITELISTED_IDS = json.load(f)
+    else:
+        WHITELISTED_IDS = []
+
 def on_close_attempt(sender, data):
     print("Program closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
 
@@ -194,16 +242,18 @@ def initialize_chat():
         return False
 
 def load_config():
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, BANNED_IDS, BANNED_USERS
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS, ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
 
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
-        
     with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
         BANNED_IDS = json.load(f)
-
-    with open(BANNED_USERS_PATH, 'r', encoding="utf-8") as f:
+    with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
         BANNED_USERS = json.load(f)
+    with open(WHITELISTED_IDS_PATH, 'r', encoding="utf-8") as f:
+        WHITELISTED_IDS = json.load(f)
+    with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
+        WHITELISTED_USERS = json.load(f)
 
     YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
     RATE_LIMIT_SECONDS = config.get("RATE_LIMIT_SECONDS", 10)
@@ -215,6 +265,10 @@ def load_config():
     REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
     REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
     MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
+    ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
+    ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
+    AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
+
 
 
 
@@ -295,13 +349,15 @@ def on_volume_change(sender, app_data, user_data):
         "ALLOW_URLS": str(ALLOW_URLS),
         "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
         "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
+        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
     }
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
     
-
 
 def show_toast(video_id, username):
     if TOAST_NOTIFICATIONS:
@@ -318,7 +374,7 @@ def get_video_title(youtube_url):
         return info['title']
 
 def get_video_name_fromID(video_id):
-    url = f"https://www.youtube.com/watch?v={video_id}"
+    url = f"https://music.youtube.com/watch?v={video_id}"
     return(get_video_title(url))
 
 def get_direct_url(youtube_url):
@@ -327,7 +383,8 @@ def get_direct_url(youtube_url):
         info = ydl.extract_info(youtube_url, download=False)
         return info['url']
 
-def queue_song(youtube_url, requester, requesterUUID):
+def queue_song(video_id, requester, requesterUUID):
+    youtube_url = "https://music.youtube.com/watch?v=" + video_id
     try:
         direct_url = get_direct_url(youtube_url)
         media = instance.media_new(direct_url)
@@ -335,13 +392,19 @@ def queue_song(youtube_url, requester, requesterUUID):
         media.set_meta(vlc.Meta.Title, title)
         media_list.add_media(media)
         logging.info(f"Queued: {youtube_url} as {title}. Requested by {requester}, UUID: {requesterUUID}")
-        if player.get_state() != vlc.State.Playing:
+
+        state = player.get_state()
+        if state in (vlc.State.Stopped, vlc.State.Ended, vlc.State.NothingSpecial):
             player.play()
+        
+        
+        show_toast(video_id, requester)
+
     except Exception as e:
         logging.warning(f"Error queuing song {youtube_url}: {e}")
 
 def on_chat_message(chat_message):
-    global BANNED_USERS, BANNED_IDS
+    global BANNED_USERS, BANNED_IDS, WHITELISTED_IDS, WHITELISTED_USERS, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST
     message = chat_message.message
 
     if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
@@ -366,8 +429,20 @@ def on_chat_message(chat_message):
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
 
-            if any(video_id == x["id"] for x in BANNED_IDS) or any(channelid == x["id"] for x in BANNED_USERS):
-                logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user or video is banned)")
+            if any(video_id == x["id"] for x in BANNED_IDS):
+                logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is banned)")
+                return
+
+            if any(channelid == x["id"] for x in BANNED_USERS):
+                logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user is banned)")
+                return
+            
+            if (ENFORCE_USER_WHITELIST and not any(channelid == x["id"] for x in WHITELISTED_USERS)):
+                logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user is not whitelisted)")
+                return
+            
+            if (ENFORCE_ID_WHITELIST and not any(video_id == x["id"] for x in WHITELISTED_IDS)):
+                logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is not whitelisted)")
                 return
             
             if 'watch?v=' in video_id:
@@ -385,8 +460,7 @@ def on_chat_message(chat_message):
                 logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
-            queue_song("https://www.youtube.com/watch?v=" + video_id, username, channelid)
-            show_toast(video_id, username)
+            queue_song(video_id, username, channelid)
             update_now_playing()
             user_last_command[username] = current_time
         except Exception as e:
@@ -416,13 +490,40 @@ def fetch_channel_name(channel_id: str) -> str:
         info = ydl.extract_info(url, download=False)
         return info.get("uploader", "Unknown Channel")
 
+def fetch_video_name(video_id: str) -> str:
+    return(get_video_name_fromID(video_id))
+
 def refresh_banned_users_list():
     configure_item("banned_users_list",
                    items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS])
 
+def refresh_banned_ids_list():
+    configure_item("banned_ids_list",
+                   items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS])
+    
+def refresh_whitelisted_users_list():
+    configure_item("whitelisted_users_list",
+                   items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS])
+
+def refresh_whitelisted_ids_list():
+    configure_item("whitelisted_ids_list",
+                   items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS])
+    
 def save_banned_users():
     with open(BANNED_USERS_PATH, "w", encoding="utf-8") as f:
         json.dump(BANNED_USERS, f, indent=4)
+    
+def save_banned_ids():
+    with open(BANNED_IDS_PATH, "w", encoding="utf-8") as f:
+        json.dump(BANNED_IDS, f, indent=4)
+
+def save_whitelisted_users():
+    with open(WHITELISTED_USERS_PATH, "w", encoding="utf-8") as f:
+        json.dump(WHITELISTED_USERS, f, indent=4)
+    
+def save_whitelisted_ids():
+    with open(WHITELISTED_IDS_PATH, "w", encoding="utf-8") as f:
+        json.dump(WHITELISTED_IDS, f, indent=4)
 
 def ban_user_callback():
     global BANNED_USERS
@@ -451,28 +552,6 @@ def ban_user_callback():
 
         threading.Thread(target=fetch_and_update, daemon=True).start()
 
-
-def unban_user_callback():
-    global BANNED_USERS
-    selected = get_value("banned_users_list")
-    if selected:
-        # Extract ID from "Name (ID)"
-        selected_id = selected.split("(")[-1].strip(")")
-        BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
-        save_banned_users()
-        refresh_banned_users_list()
-
-def fetch_video_name(video_id: str) -> str:
-    return(get_video_name_fromID(video_id))
-
-def refresh_banned_ids_list():
-    configure_item("banned_ids_list",
-                   items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS])
-    
-def save_banned_ids():
-    with open(BANNED_IDS_PATH, "w", encoding="utf-8") as f:
-        json.dump(BANNED_IDS, f, indent=4)
-
 def ban_id_callback():
     global BANNED_IDS
     id_to_ban = get_value("ban_id_input").strip()
@@ -500,6 +579,70 @@ def ban_id_callback():
 
         threading.Thread(target=fetch_and_update, daemon=True).start()
 
+def whitelist_user_callback():
+    global WHITELISTED_USERS
+    user_to_whitelist = get_value("whitelist_user_input").strip()
+    if user_to_whitelist and all(u["id"] != user_to_whitelist for u in WHITELISTED_USERS):
+        # Add immediately with placeholder
+        WHITELISTED_USERS.append({"id": user_to_whitelist, "name": "Loading..."})
+        save_whitelisted_users()
+        refresh_whitelisted_users_list()
+        set_value("whitelist_user_input", "")  # clear input
+
+        # Fetch in background
+        def fetch_and_update():
+            try:
+                real_name = fetch_channel_name(user_to_whitelist)
+                # Update the entry in WHITELISTED_USERS
+                for u in WHITELISTED_USERS:
+                    if u["id"] == user_to_whitelist:
+                        u["name"] = real_name
+                        break
+                save_whitelisted_users()
+                # Update the listbox in the GUI thread
+                refresh_whitelisted_users_list()
+            except Exception as e:
+                logging.error(f"Error fetching channel name for {user_to_whitelist}: {e}")
+
+        threading.Thread(target=fetch_and_update, daemon=True).start()
+
+def whitelist_id_callback():
+    global WHITELISTED_IDS
+    id_to_whitelist = get_value("whitelist_id_input").strip()
+    if id_to_whitelist and all(u["id"] != id_to_whitelist for u in WHITELISTED_IDS):
+        # Add immediately with placeholder
+        WHITELISTED_IDS.append({"id": id_to_whitelist, "name": "Loading..."})
+        save_whitelisted_ids()
+        refresh_whitelisted_ids_list()
+        set_value("whitelist_id_input", "")  # clear input
+
+        # Fetch in background
+        def fetch_and_update():
+            try:
+                real_name = fetch_video_name(id_to_whitelist)
+                # Update the entry in WHITELISTED_IDS
+                for u in WHITELISTED_IDS:
+                    if u["id"] == id_to_whitelist:
+                        u["name"] = real_name
+                        break
+                save_whitelisted_ids()
+                # Update the listbox in the GUI thread
+                refresh_whitelisted_ids_list()
+            except Exception as e:
+                logging.error(f"Error fetching channel name for {id_to_whitelist}: {e}")
+
+        threading.Thread(target=fetch_and_update, daemon=True).start()
+
+def unban_user_callback():
+    global BANNED_USERS
+    selected = get_value("banned_users_list")
+    if selected:
+        # Extract ID from "Name (ID)"
+        selected_id = selected.split("(")[-1].strip(")")
+        BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
+        save_banned_users()
+        refresh_banned_users_list()
+
 def unban_id_callback():
     global BANNED_IDS
     selected = get_value("banned_ids_list")
@@ -509,6 +652,26 @@ def unban_id_callback():
         BANNED_IDS = [u for u in BANNED_IDS if u["id"] != selected_id]
         save_banned_ids()
         refresh_banned_ids_list()
+
+def unwhitelist_user_callback():
+    global WHITELISTED_USERS
+    selected = get_value("whitelisted_users_list")
+    if selected:
+        # Extract ID from "Name (ID)"
+        selected_id = selected.split("(")[-1].strip(")")
+        WHITELISTED_USERS = [u for u in WHITELISTED_USERS if u["id"] != selected_id]
+        save_whitelisted_users()
+        refresh_whitelisted_users_list()
+
+def unwhitelist_id_callback():
+    global WHITELISTED_IDS
+    selected = get_value("whitelisted_ids_list")
+    if selected:
+        # Extract ID from "Name (ID)"
+        selected_id = selected.split("(")[-1].strip(")")
+        WHITELISTED_IDS = [u for u in WHITELISTED_IDS if u["id"] != selected_id]
+        save_whitelisted_ids()
+        refresh_whitelisted_ids_list()
 # ---------------------- GUI ----------------------
 create_context()
 now_playing_text = None
@@ -562,7 +725,11 @@ def toggle_theme(sender, app_data, user_data):
         "ALLOW_URLS": str(ALLOW_URLS),
         "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
         "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
+        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -583,7 +750,10 @@ def set_theme(dark_mode):
         "ALLOW_URLS": str(ALLOW_URLS),
         "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
         "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
+        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -593,7 +763,7 @@ def build_gui():
     global now_playing_text
 
     def update_settings_from_menu():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST
         
         RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
         TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
@@ -603,6 +773,9 @@ def build_gui():
         REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
         REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
         MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
+        ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
+        ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
+        AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
 
         updated_config = {
             "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
@@ -615,7 +788,10 @@ def build_gui():
             "ALLOW_URLS": str(ALLOW_URLS),
             "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
             "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
+            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
+            "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
+            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -670,6 +846,10 @@ def build_gui():
             add_button(label="Manage Banned Users", callback=lambda: (load_banned_users(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
             add_button(label="Manage Banned Videos", callback=lambda: (load_banned_ids(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
 
+        with group(horizontal=True):
+            add_button(label="Manage Whitelisted Users", callback=lambda: (load_whitelisted_users(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
+            add_button(label="Manage Whitelisted Videos", callback=lambda: (load_whitelisted_ids(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
+
 
 
         with collapsing_header(label="Settings"):
@@ -681,7 +861,11 @@ def build_gui():
             add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
             add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
             add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
+            add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
+            add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+            add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
 
+            
             add_spacer(height=10)
             add_button(label="Update Settings", callback=update_settings_from_menu)
 
@@ -703,6 +887,13 @@ def build_gui():
             with tooltip("minimum_superchat_input"):
                 add_text("The minimum value superchat (in USD) that a user must spend to request a song")
                 add_text("Supplementary to 'Require Superchat to request'")
+            with tooltip("enforce_user_whitelist_checkbox"):
+                add_text("Whether or not to enforce the user Whitelist")
+            with tooltip("enforce_id_whitelist_checkbox"):
+                add_text("Whether or not to enforce the song ID Whitelist")
+            with tooltip("autoremove_songs_checkbox"):
+                add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+            
 
 
                 
@@ -779,7 +970,48 @@ def build_gui():
             add_button(label="Unban Selected", callback=lambda: unban_id_callback())
 
             add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("BannedIDsWindow", show=False))
+            add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
+
+
+        with window(label="Whitelisted Users", tag="WhitelistedUsersWindow", show=False, width=400, height=400):
+            add_text("Manage Whitelisted Users")
+            add_separator()
+
+            # List banned users
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS], tag="whitelisted_users_list", width=350, num_items=8)
+            add_spacer(height=10)
+
+            # Input for adding user
+            add_input_text(label="Add User ID", tag="whitelist_user_input", width=250)
+            add_button(label="Whitelist User", callback=lambda: whitelist_user_callback())
+
+            add_spacer(height=10)
+
+            # Remove selected user
+            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_user_callback())
+
+            add_spacer(height=20)
+            add_button(label="Close", callback=lambda: configure_item("WhitelistedUsersWindow", show=False))
+
+        with window(label="Whitelisted IDs", tag="WhitelistedIDsWindow", show=False, width=400, height=400):
+            add_text("Manage Whitelisted IDs")
+            add_separator()
+
+            # List banned users
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS], tag="whitelisted_ids_list", width=350, num_items=8)
+            add_spacer(height=10)
+
+            # Input for adding user
+            add_input_text(label="Add Video ID", tag="whitelist_id_input", width=250)
+            add_button(label="Whitelist Video", callback=lambda: whitelist_id_callback())
+
+            add_spacer(height=10)
+
+            # Remove selected user
+            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_id_callback())
+
+            add_spacer(height=20)
+            add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
 
     create_dark_theme()
     create_light_theme()
@@ -795,7 +1027,7 @@ def build_gui():
 def show_config_menu(invalid_id=False):
     create_context()
     def save_and_start_callback():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST
 
         # Update in-memory config from GUI values
         YOUTUBE_VIDEO_ID = get_value("id_input")
@@ -807,6 +1039,10 @@ def show_config_menu(invalid_id=False):
         ALLOW_URLS = get_value("allowURLs_checkbox")
         REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
         MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
+        ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
+        ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
+        AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
+
 
         # Save config to file
         updated_config = {
@@ -820,7 +1056,10 @@ def show_config_menu(invalid_id=False):
             "ALLOW_URLS": str(get_value("allowURLs_checkbox")),
             "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
             "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT
+            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
+            "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
+            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
         }
 
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -845,6 +1084,10 @@ def show_config_menu(invalid_id=False):
         add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
         add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
         add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
+        add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
+        add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+        add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
+
 
         add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
         
@@ -878,6 +1121,13 @@ def show_config_menu(invalid_id=False):
             add_text("Supplementary to 'Require Superchat to request'")
         with tooltip("dark_mode_checkbox"):
             add_text("Whether or not the UI will use dark or light mode")
+        with tooltip("enforce_user_whitelist_checkbox"):
+            add_text("Whether or not to enforce the user Whitelist")
+        with tooltip("enforce_id_whitelist_checkbox"):
+            add_text("Whether or not to enforce the song ID Whitelist")
+        with tooltip("autoremove_songs_checkbox"):
+            add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+            
         
     create_dark_theme()
     create_light_theme()
