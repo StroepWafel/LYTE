@@ -126,7 +126,8 @@ default_config = {
     "REQUIRE_SUPERCHAT": "False",
     "MINIMUM_SUPERCHAT": 3,
     "ENFORCE_ID_WHITELIST": "False",
-    "ENFORCE_USER_WHITELIST": "False"
+    "ENFORCE_USER_WHITELIST": "False",
+    "AUTOREMOVE_SONGS": "True"
 }
 
 ensure_file_exists(CONFIG_PATH, default_config)
@@ -162,10 +163,26 @@ REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
 MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
 ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
 ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
+AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
 
 user_last_command = defaultdict(lambda: 0)
 config_success = False
 # ---------------------- VLC Setup ----------------------
+
+def on_next_item(event):
+    if (AUTOREMOVE_SONGS):
+        try:
+            # Always remove the first item (the one that just finished)
+            if media_list.count() > 1:
+                media_list.lock()
+                media_list.remove_index(0)
+                media_list.unlock()
+                logging.info("Removed finished song from queue")
+            if media_list.count() == 0:
+                logging.info("Queue empty - stopping player")
+                player.stop()
+        except Exception as e:
+            logging.error(f"Error removing finished song: {e}")
 
 instance = vlc.Instance("--one-instance")
 player = instance.media_list_player_new()
@@ -173,6 +190,8 @@ media_list = instance.media_list_new()
 player.set_media_list(media_list)
 player.play()
 player.get_media_player().audio_set_volume(VOLUME)
+event_manager = player.event_manager()
+event_manager.event_attach(vlc.EventType.MediaListPlayerNextItemSet, on_next_item)
 logging.info("Started VLC...")
 
 # ---------------------- Functions ----------------------
@@ -223,7 +242,7 @@ def initialize_chat():
         return False
 
 def load_config():
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS, ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS, ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
 
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
@@ -248,6 +267,8 @@ def load_config():
     MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
     ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
     ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
+    AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
+
 
 
 
@@ -330,7 +351,8 @@ def on_volume_change(sender, app_data, user_data):
         "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
         "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST)
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
     }
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -361,7 +383,8 @@ def get_direct_url(youtube_url):
         info = ydl.extract_info(youtube_url, download=False)
         return info['url']
 
-def queue_song(youtube_url, requester, requesterUUID):
+def queue_song(video_id, requester, requesterUUID):
+    youtube_url = "https://music.youtube.com/watch?v=" + video_id
     try:
         direct_url = get_direct_url(youtube_url)
         media = instance.media_new(direct_url)
@@ -373,6 +396,10 @@ def queue_song(youtube_url, requester, requesterUUID):
         state = player.get_state()
         if state in (vlc.State.Stopped, vlc.State.Ended, vlc.State.NothingSpecial):
             player.play()
+        
+        
+        show_toast(video_id, requester)
+
     except Exception as e:
         logging.warning(f"Error queuing song {youtube_url}: {e}")
 
@@ -433,8 +460,7 @@ def on_chat_message(chat_message):
                 logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
-            queue_song("https://music.youtube.com/watch?v=" + video_id, username, channelid)
-            show_toast(video_id, username)
+            queue_song(video_id, username, channelid)
             update_now_playing()
             user_last_command[username] = current_time
         except Exception as e:
@@ -701,7 +727,9 @@ def toggle_theme(sender, app_data, user_data):
         "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
         "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST)
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -724,7 +752,8 @@ def set_theme(dark_mode):
         "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
         "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST)
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -746,6 +775,7 @@ def build_gui():
         MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
         ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
         ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
+        AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
 
         updated_config = {
             "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
@@ -760,7 +790,8 @@ def build_gui():
             "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
             "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
             "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST)
+            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -832,6 +863,7 @@ def build_gui():
             add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
             add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
             add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+            add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
 
             
             add_spacer(height=10)
@@ -859,6 +891,8 @@ def build_gui():
                 add_text("Whether or not to enforce the user Whitelist")
             with tooltip("enforce_id_whitelist_checkbox"):
                 add_text("Whether or not to enforce the song ID Whitelist")
+            with tooltip("autoremove_songs_checkbox"):
+                add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
             
 
 
@@ -1007,6 +1041,8 @@ def show_config_menu(invalid_id=False):
         MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
         ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
         ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
+        AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
+
 
         # Save config to file
         updated_config = {
@@ -1022,7 +1058,8 @@ def show_config_menu(invalid_id=False):
             "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
             "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
             "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST)
+            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
         }
 
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -1049,6 +1086,8 @@ def show_config_menu(invalid_id=False):
         add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
         add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
         add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+        add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
+
 
         add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
         
@@ -1086,6 +1125,8 @@ def show_config_menu(invalid_id=False):
             add_text("Whether or not to enforce the user Whitelist")
         with tooltip("enforce_id_whitelist_checkbox"):
             add_text("Whether or not to enforce the song ID Whitelist")
+        with tooltip("autoremove_songs_checkbox"):
+            add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
             
         
     create_dark_theme()
