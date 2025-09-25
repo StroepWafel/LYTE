@@ -1,65 +1,130 @@
-import time
+# =============================================================================
+# LYTE - YouTube Live Music Queue Bot
+# A bot that allows YouTube live stream viewers to queue music via chat commands
+# =============================================================================
+
+# Standard Library Imports
 import json
-import os
 import logging
-import sys
+import os
 import re
+import sys
 import threading
+import time
 import traceback
 from collections import defaultdict
 from datetime import datetime
 from time import time as current_time
-import pytchat
-import yt_dlp
-import requests
-from plyer import notification
-import vlc  # Using python-vlc
-from dearpygui.dearpygui import *
-import forex_python.converter
 
-# ---------------------- App Initialization ----------------------
+# Third-Party Imports
+import pytchat  # YouTube live chat integration
+import yt_dlp  # YouTube video/audio extraction
+import requests  # HTTP requests
+from plyer import notification  # Desktop notifications
+import vlc  # Media player (python-vlc)
+from dearpygui.dearpygui import *  # GUI framework
+import forex_python.converter  # Currency conversion for superchat values
 
-def get_app_folder():
+# =============================================================================
+# APPLICATION INITIALIZATION & GLOBAL CONSTANTS
+# =============================================================================
+
+def get_app_folder() -> str:
+    """
+    Determine the application folder path.
+    
+    Returns:
+        str: Path to the application directory (executable dir if frozen, script dir otherwise)
+    """
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
+# Initialize currency converter for superchat value conversion
 converter = forex_python.converter.CurrencyRates()
 
+# =============================================================================
+# GLOBAL CONSTANTS & PATHS
+# =============================================================================
+
+# Application paths
 APP_FOLDER = get_app_folder()
 LOG_FOLDER = os.path.join(APP_FOLDER, 'logs')
 os.makedirs(LOG_FOLDER, exist_ok=True)
 
+# Configuration file paths
+CONFIG_PATH = os.path.join(APP_FOLDER, 'config.json')
+BANNED_IDS_PATH = os.path.join(APP_FOLDER, 'banned_IDs.json')
+BANNED_USERS_PATH = os.path.join(APP_FOLDER, 'banned_users.json')
+WHITELISTED_IDS_PATH = os.path.join(APP_FOLDER, 'whitelisted_IDs.json')
+WHITELISTED_USERS_PATH = os.path.join(APP_FOLDER, 'whitelisted_users.json')
+
+# =============================================================================
+# LOGGING SETUP
+# =============================================================================
+
+# Create timestamped log file
 log_filename = os.path.join(LOG_FOLDER, f"app_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+
+# Configure logging with both file and console output
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 file_handler = logging.FileHandler(log_filename)
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 file_handler.setLevel(logging.INFO)
 logging.getLogger().addHandler(file_handler)
+
+# Suppress noisy third-party library logs
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger('httpx').setLevel(logging.ERROR)
 logging.getLogger('httpcore').setLevel(logging.ERROR)
 
+# =============================================================================
+# GLOBAL STATE VARIABLES
+# =============================================================================
+
+# GUI state variables
 is_user_dragging_slider = False
 last_slider_value = 0.0
-
 last_user_seek_time = 0
 last_gui_update_time = 0
 
+# Application control
 should_exit = False
 
-# ---------------------- Setup/Import Configuration ----------------------
+# =============================================================================
+# CONFIGURATION MANAGEMENT
+# =============================================================================
 
+# Global data structures for banned/whitelisted users and videos
 BANNED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
-BANNED_IDS: list[dict] = []  # {"id": "xxxxxx", "name": "VideoName"}
+BANNED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
+WHITELISTED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
+WHITELISTED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
 
-def ensure_file_exists(filepath, default_content):
+def ensure_file_exists(filepath: str, default_content) -> None:
+    """
+    Create a file with default content if it doesn't exist.
+    
+    Args:
+        filepath: Path to the file to create
+        default_content: Default content to write to the file
+    """
     if not os.path.isfile(filepath):
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(default_content, f, indent=4)
         logging.info(f"Created missing file: {filepath}")
 
-def ensure_json_valid(filepath, default_content):
+def ensure_json_valid(filepath: str, default_content: dict) -> None:
+    """
+    Validate and clean a JSON configuration file.
+    
+    This function ensures the JSON file is valid and contains only expected keys.
+    If the file is corrupted or contains extra keys, it will be cleaned up.
+    
+    Args:
+        filepath: Path to the JSON file to validate
+        default_content: Default configuration structure to validate against
+    """
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             try:
@@ -83,7 +148,6 @@ def ensure_json_valid(filepath, default_content):
                 modified = True
                 logging.info(f"Added missing key '{key}' to {filepath}")
 
-
         # Check for and remove extra keys
         extra_keys = set(data.keys()) - set(default_content.keys())
         if extra_keys:
@@ -91,7 +155,7 @@ def ensure_json_valid(filepath, default_content):
             logging.info(f"Removing extra keys from {filepath}: {extra_keys}")
 
         if modified:
-            # Create a backup manually
+            # Create a backup before making changes
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_path = f"{filepath}.backup_{timestamp}.json"
             with open(backup_path, 'w', encoding='utf-8') as backup_file:
@@ -106,38 +170,43 @@ def ensure_json_valid(filepath, default_content):
     except Exception as e:
         logging.error(f"Error validating JSON file {filepath}: {e}")
 
+# =============================================================================
+# DEFAULT CONFIGURATION
+# =============================================================================
 
-CONFIG_PATH = os.path.join(APP_FOLDER, 'config.json')
-BANNED_IDS_PATH = os.path.join(APP_FOLDER, 'banned_IDs.json')
-BANNED_USERS_PATH = os.path.join(APP_FOLDER, 'banned_users.json')
-WHITELISTED_IDS_PATH = os.path.join(APP_FOLDER, 'whitelisted_IDs.json')
-WHITELISTED_USERS_PATH = os.path.join(APP_FOLDER, 'whitelisted_users.json')
-
+# Default configuration values for the application
 default_config = {
-    "YOUTUBE_VIDEO_ID": "LIVESTREAM_ID",
-    "RATE_LIMIT_SECONDS": 3000,
-    "TOAST_NOTIFICATIONS": "True",
-    "PREFIX": "!",
-    "QUEUE_COMMAND": "queue",
-    "VOLUME": 50,
-    "DARK_MODE": "True",
-    "ALLOW_URLS": "False",
-    "REQUIRE_MEMBERSHIP": "False",
-    "REQUIRE_SUPERCHAT": "False",
-    "MINIMUM_SUPERCHAT": 3,
-    "ENFORCE_ID_WHITELIST": "False",
-    "ENFORCE_USER_WHITELIST": "False",
-    "AUTOREMOVE_SONGS": "True"
+    "YOUTUBE_VIDEO_ID": "LIVESTREAM_ID",      # YouTube livestream ID to monitor
+    "RATE_LIMIT_SECONDS": 3000,               # Cooldown between user requests (seconds)
+    "TOAST_NOTIFICATIONS": "True",            # Enable desktop notifications
+    "PREFIX": "!",                            # Command prefix for chat messages
+    "QUEUE_COMMAND": "queue",                 # Command name for queuing songs
+    "VOLUME": 50,                             # Default volume level (0-100)
+    "DARK_MODE": "True",                      # Enable dark theme
+    "ALLOW_URLS": "False",                    # Allow full YouTube URLs in requests
+    "REQUIRE_MEMBERSHIP": "False",            # Require channel membership to request
+    "REQUIRE_SUPERCHAT": "False",             # Require superchat to request
+    "MINIMUM_SUPERCHAT": 3,                   # Minimum superchat value in USD
+    "ENFORCE_ID_WHITELIST": "False",          # Only allow whitelisted video IDs
+    "ENFORCE_USER_WHITELIST": "False",        # Only allow whitelisted users
+    "AUTOREMOVE_SONGS": "True"                # Auto-remove finished songs from queue
 }
 
+# =============================================================================
+# CONFIGURATION INITIALIZATION
+# =============================================================================
+
+# Ensure all required files exist with default content
 ensure_file_exists(CONFIG_PATH, default_config)
 ensure_file_exists(BANNED_IDS_PATH, [])
 ensure_file_exists(BANNED_USERS_PATH, [])
 ensure_file_exists(WHITELISTED_IDS_PATH, [])
 ensure_file_exists(WHITELISTED_USERS_PATH, [])
 
+# Validate and clean configuration files
 ensure_json_valid(CONFIG_PATH, default_config)
 
+# Load configuration data from files
 with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
     config = json.load(f)
 with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
@@ -149,7 +218,11 @@ with open(WHITELISTED_IDS_PATH, 'r', encoding="utf-8") as f:
 with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
     WHITELISTED_USERS = json.load(f)
 
+# =============================================================================
+# CONFIGURATION VARIABLES
+# =============================================================================
 
+# Parse configuration values with defaults
 YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
 RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 3000)
 TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true"
@@ -165,12 +238,23 @@ ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "t
 ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
 AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
 
+# User rate limiting - tracks last command time per user
 user_last_command = defaultdict(lambda: 0)
 config_success = False
-# ---------------------- VLC Setup ----------------------
+# =============================================================================
+# VLC MEDIA PLAYER SETUP
+# =============================================================================
 
-def on_next_item(event):
-    if (AUTOREMOVE_SONGS):
+def on_next_item(event) -> None:
+    """
+    Callback function triggered when VLC moves to the next item in the playlist.
+    
+    If auto-remove is enabled, this removes the finished song from the queue.
+    
+    Args:
+        event: VLC event object (unused but required by VLC callback signature)
+    """
+    if AUTOREMOVE_SONGS:
         try:
             # Always remove the first item (the one that just finished)
             if media_list.count() > 1:
@@ -184,19 +268,30 @@ def on_next_item(event):
         except Exception as e:
             logging.error(f"Error removing finished song: {e}")
 
-instance = vlc.Instance("--one-instance")
-player = instance.media_list_player_new()
-media_list = instance.media_list_new()
-player.set_media_list(media_list)
-player.play()
-player.get_media_player().audio_set_volume(VOLUME)
+# Initialize VLC media player components
+instance = vlc.Instance("--one-instance")  # Prevent multiple VLC instances
+player = instance.media_list_player_new()  # Create playlist player
+media_list = instance.media_list_new()     # Create empty playlist
+player.set_media_list(media_list)          # Assign playlist to player
+player.play()                              # Start the player
+player.get_media_player().audio_set_volume(VOLUME)  # Set initial volume
+
+# Set up event handling for automatic song removal
 event_manager = player.event_manager()
 event_manager.event_attach(vlc.EventType.MediaListPlayerNextItemSet, on_next_item)
-logging.info("Started VLC...")
+logging.info("Started VLC media player...")
 
-# ---------------------- Functions ----------------------
+# =============================================================================
+# DATA MANAGEMENT FUNCTIONS
+# =============================================================================
 
-def load_banned_users():
+def load_banned_users() -> None:
+    """
+    Load banned users list from file.
+    
+    Updates the global BANNED_USERS list with data from the banned users JSON file.
+    If the file doesn't exist, initializes an empty list.
+    """
     global BANNED_USERS
     if os.path.exists(BANNED_USERS_PATH):
         with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
@@ -204,7 +299,13 @@ def load_banned_users():
     else:
         BANNED_USERS = []
 
-def load_banned_ids():
+def load_banned_ids() -> None:
+    """
+    Load banned video IDs list from file.
+    
+    Updates the global BANNED_IDS list with data from the banned IDs JSON file.
+    If the file doesn't exist, initializes an empty list.
+    """
     global BANNED_IDS
     if os.path.exists(BANNED_IDS_PATH):
         with open(BANNED_IDS_PATH, "r", encoding="utf-8") as f:
@@ -212,7 +313,13 @@ def load_banned_ids():
     else:
         BANNED_IDS = []
 
-def load_whitelisted_users():
+def load_whitelisted_users() -> None:
+    """
+    Load whitelisted users list from file.
+    
+    Updates the global WHITELISTED_USERS list with data from the whitelisted users JSON file.
+    If the file doesn't exist, initializes an empty list.
+    """
     global WHITELISTED_USERS
     if os.path.exists(WHITELISTED_USERS_PATH):
         with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
@@ -220,7 +327,13 @@ def load_whitelisted_users():
     else:
         WHITELISTED_USERS = []
 
-def load_whitelisted_ids():
+def load_whitelisted_ids() -> None:
+    """
+    Load whitelisted video IDs list from file.
+    
+    Updates the global WHITELISTED_IDS list with data from the whitelisted IDs JSON file.
+    If the file doesn't exist, initializes an empty list.
+    """
     global WHITELISTED_IDS
     if os.path.exists(WHITELISTED_IDS_PATH):
         with open(WHITELISTED_IDS_PATH, "r", encoding="utf-8") as f:
@@ -228,10 +341,27 @@ def load_whitelisted_ids():
     else:
         WHITELISTED_IDS = []
 
-def on_close_attempt(sender, data):
+# =============================================================================
+# APPLICATION CONTROL FUNCTIONS
+# =============================================================================
+
+def on_close_attempt(sender, data) -> None:
+    """
+    Handle application close attempt.
+    
+    Args:
+        sender: GUI element that triggered the close (unused)
+        data: Additional data (unused)
+    """
     print("Program closed - If this was you, please use 'Quit' button instead! (unless program is frozen)")
 
-def initialize_chat():
+def initialize_chat() -> bool:
+    """
+    Initialize YouTube live chat connection.
+    
+    Returns:
+        bool: True if chat connection successful, False otherwise
+    """
     global chat
     try:
         chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
@@ -241,9 +371,19 @@ def initialize_chat():
         logging.critical(f"Error {traceback.format_exc()}")
         return False
 
-def load_config():
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS, ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
+def load_config() -> None:
+    """
+    Load and parse all configuration files.
+    
+    Reloads all configuration data from JSON files and updates global variables.
+    This function is called when configuration changes are made through the GUI.
+    """
+    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+    global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
+    global BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS
+    global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
 
+    # Load all configuration files
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
     with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
@@ -255,6 +395,7 @@ def load_config():
     with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
         WHITELISTED_USERS = json.load(f)
 
+    # Parse configuration values with defaults
     YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
     RATE_LIMIT_SECONDS = config.get("RATE_LIMIT_SECONDS", 10)
     TOAST_NOTIFICATIONS = config.get("TOAST_NOTIFICATIONS", "True").lower() == "true"
@@ -272,12 +413,18 @@ def load_config():
 
 
 
-def quit_program():
+def quit_program() -> None:
+    """
+    Gracefully shutdown the application.
+    
+    Stops all media playback, releases VLC resources, and closes the GUI.
+    """
     global should_exit
     should_exit = True
     
     logging.info("Shutting down program")
 
+    # Clean up VLC resources
     try:
         player.stop()
         media_player = player.get_media_player()
@@ -290,29 +437,76 @@ def quit_program():
     except Exception as e:
         logging.error(f"Error releasing VLC resources: {e}")
 
+    # Close GUI
     stop_dearpygui()
     logging.info("GUI closed")
 
-def format_time(seconds):
+# =============================================================================
+# MEDIA PLAYER UTILITY FUNCTIONS
+# =============================================================================
+
+def format_time(seconds: float) -> str:
+    """
+    Format time in seconds to MM:SS format.
+    
+    Args:
+        seconds: Time in seconds
+        
+    Returns:
+        str: Formatted time string (MM:SS)
+    """
     minutes = int(seconds // 60)
     seconds = int(seconds % 60)
     return f"{minutes:02d}:{seconds:02d}"
 
-def get_curr_songtime():
+def get_curr_songtime() -> float:
+    """
+    Get current playback position of the current song.
+    
+    Returns:
+        float: Current time in seconds, or None if no media is playing
+    """
     media_player = player.get_media_player()
     if media_player is None:
         logging.warning("No media player found.")
-        return
+        return None
 
     current_time_ms = media_player.get_time()
 
     if current_time_ms < 0:
-        return
+        return None
     
     current_time_sec = current_time_ms / 1000
     return current_time_sec
 
-def on_song_slider_change(sender, app_data, user_data):
+def get_song_length() -> float:
+    """
+    Get the total length of the current song.
+    
+    Returns:
+        float: Song length in seconds, or None if no media is loaded
+    """
+    media_player = player.get_media_player()
+    if media_player is None:
+        logging.warning("No media player found.")
+        return None
+    length_ms = media_player.get_length()
+    
+    if length_ms <= 0:
+        return None
+    
+    length_sec = length_ms / 1000
+    return length_sec
+
+def on_song_slider_change(sender, app_data, user_data) -> None:
+    """
+    Handle song progress slider changes.
+    
+    Args:
+        sender: GUI element that triggered the callback (unused)
+        app_data: New slider value (0.0 to 1.0)
+        user_data: Additional user data (unused)
+    """
     global last_user_seek_time
     length = get_song_length()
     if length:
@@ -320,24 +514,20 @@ def on_song_slider_change(sender, app_data, user_data):
         player.get_media_player().set_time(new_time_ms)
         last_user_seek_time = current_time()
 
-def get_song_length():
-    media_player = player.get_media_player()
-    if media_player is None:
-        logging.warning("No media player found.")
-        return
-    length_ms = media_player.get_length()
+def on_volume_change(sender, app_data, user_data) -> None:
+    """
+    Handle volume slider changes.
     
-    if length_ms <= 0:
-        return
-    
-    length_sec = length_ms / 1000
-    return length_sec
-
-def on_volume_change(sender, app_data, user_data):
+    Args:
+        sender: GUI element that triggered the callback (unused)
+        app_data: New volume value (0.0 to 100.0)
+        user_data: Additional user data (unused)
+    """
     global VOLUME
     VOLUME = int(app_data)  # VLC expects volume 0–100
     player.get_media_player().audio_set_volume(VOLUME)
 
+    # Save volume setting to config file
     updated_config = {
         "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
         "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
@@ -357,9 +547,19 @@ def on_volume_change(sender, app_data, user_data):
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
-    
 
-def show_toast(video_id, username):
+# =============================================================================
+# NOTIFICATION FUNCTIONS
+# =============================================================================
+
+def show_toast(video_id: str, username: str) -> None:
+    """
+    Show desktop notification when a song is queued.
+    
+    Args:
+        video_id: YouTube video ID
+        username: Username who requested the song
+    """
     if TOAST_NOTIFICATIONS:
         notification.notify(
             title="Requested by: " + username,
@@ -367,84 +567,153 @@ def show_toast(video_id, username):
             timeout=5
         )
 
-def get_video_title(youtube_url):
-    ydl_opts = { 'quiet': True, 'extract_flat': True }
+# =============================================================================
+# YOUTUBE INTEGRATION FUNCTIONS
+# =============================================================================
+
+def get_video_title(youtube_url: str) -> str:
+    """
+    Extract video title from YouTube URL.
+    
+    Args:
+        youtube_url: Full YouTube URL
+        
+    Returns:
+        str: Video title
+    """
+    ydl_opts = {'quiet': True, 'extract_flat': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=False)
         return info['title']
 
-def get_video_name_fromID(video_id):
+def get_video_name_fromID(video_id: str) -> str:
+    """
+    Get video title from YouTube video ID.
+    
+    Args:
+        video_id: YouTube video ID
+        
+    Returns:
+        str: Video title
+    """
     url = f"https://music.youtube.com/watch?v={video_id}"
-    return(get_video_title(url))
+    return get_video_title(url)
 
-def get_direct_url(youtube_url):
+def get_direct_url(youtube_url: str) -> str:
+    """
+    Get direct audio stream URL from YouTube URL.
+    
+    Args:
+        youtube_url: Full YouTube URL
+        
+    Returns:
+        str: Direct audio stream URL for VLC playback
+    """
     ydl_opts = {'format': 'bestaudio'}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=False)
         return info['url']
 
-def queue_song(video_id, requester, requesterUUID):
+# =============================================================================
+# SONG QUEUE MANAGEMENT
+# =============================================================================
+
+def queue_song(video_id: str, requester: str, requesterUUID: str) -> None:
+    """
+    Add a song to the VLC playlist queue.
+    
+    Args:
+        video_id: YouTube video ID
+        requester: Username who requested the song
+        requesterUUID: Unique identifier for the requester
+    """
     youtube_url = "https://music.youtube.com/watch?v=" + video_id
     try:
+        # Get direct audio stream URL
         direct_url = get_direct_url(youtube_url)
         media = instance.media_new(direct_url)
         title = get_video_title(youtube_url)
         media.set_meta(vlc.Meta.Title, title)
         media_list.add_media(media)
+        
         logging.info(f"Queued: {youtube_url} as {title}. Requested by {requester}, UUID: {requesterUUID}")
 
+        # Start playback if player is stopped
         state = player.get_state()
         if state in (vlc.State.Stopped, vlc.State.Ended, vlc.State.NothingSpecial):
             player.play()
         
-        
+        # Show notification
         show_toast(video_id, requester)
 
     except Exception as e:
         logging.warning(f"Error queuing song {youtube_url}: {e}")
 
-def on_chat_message(chat_message):
-    global BANNED_USERS, BANNED_IDS, WHITELISTED_IDS, WHITELISTED_USERS, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST
+# =============================================================================
+# CHAT MESSAGE PROCESSING
+# =============================================================================
+
+def on_chat_message(chat_message) -> None:
+    """
+    Process incoming YouTube live chat messages.
+    
+    Handles song queue requests from chat users, applying all validation rules
+    including rate limiting, banned lists, whitelists, and permission requirements.
+    
+    Args:
+        chat_message: Chat message object from pytchat
+    """
+    global BANNED_USERS, BANNED_IDS, WHITELISTED_IDS, WHITELISTED_USERS
+    global ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST
     message = chat_message.message
 
+    # Only process messages that start with the command prefix
     if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
         try:
+            # Extract user information
             username = chat_message.author.name
             channelid = chat_message.author.channelId
             userismember = chat_message.author.isChatSponsor
             issuperchat = chat_message.type == "superChat"
             superchatvalue = 0
 
+            # Convert superchat value to USD if applicable
             if issuperchat:
-                superchatvalue = convert_to_usd(chat_message.amountValue, chat_message.currency) 
-
+                superchatvalue = convert_to_usd(chat_message.amountValue, chat_message.currency)
 
             current_time = time.time()
 
-
+            # Parse command - should be "!queue VIDEO_ID"
             parts = message.split()
             if not len(parts) == 2:
                 return
             video_id = parts[1]
+
+            # Check rate limiting
             if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
                 return
 
+            # Check if video is banned
             if any(video_id == x["id"] for x in BANNED_IDS):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is banned)")
                 return
 
+            # Check if user is banned
             if any(channelid == x["id"] for x in BANNED_USERS):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user is banned)")
                 return
             
+            # Check user whitelist if enforced
             if (ENFORCE_USER_WHITELIST and not any(channelid == x["id"] for x in WHITELISTED_USERS)):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user is not whitelisted)")
                 return
             
+            # Check video whitelist if enforced
             if (ENFORCE_ID_WHITELIST and not any(video_id == x["id"] for x in WHITELISTED_IDS)):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is not whitelisted)")
                 return
             
+            # Handle full YouTube URLs if allowed
             if 'watch?v=' in video_id:
                 if ALLOW_URLS:
                     video_id = video_id.split('watch?v=', 1)[1]
@@ -452,21 +721,34 @@ def on_chat_message(chat_message):
                     logging.warning(f"user {username} attempted to queue a URL but URL queuing is disabled! (url: {video_id})")
                     return
                 
+            # Check membership requirement
             if REQUIRE_MEMBERSHIP and not userismember:
                 logging.warning(f"user {username} attempted to queue a song but they are not a member and 'REQUIRE_MEMBERSHIP' is enabled!")
                 return
 
+            # Check superchat requirement
             if REQUIRE_SUPERCHAT and (not issuperchat or superchatvalue < MINIMUM_SUPERCHAT):
                 logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
+            # All checks passed - queue the song
             queue_song(video_id, username, channelid)
             update_now_playing()
             user_last_command[username] = current_time
+            
         except Exception as e:
             logging.error("Chat message error: %s", e)
     
-def update_now_playing():
+# =============================================================================
+# GUI UPDATE FUNCTIONS
+# =============================================================================
+
+def update_now_playing() -> None:
+    """
+    Update the 'Now Playing' display in the GUI.
+    
+    Fetches the current media title and updates the GUI text element.
+    """
     media = player.get_media_player().get_media()
     if media:
         media.parse_with_options(vlc.MediaParseFlag.local, timeout=1000)
@@ -478,12 +760,34 @@ def update_now_playing():
     else:
         set_value(now_playing_text, "Now Playing: Nothing")
 
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
 
-def convert_to_usd(value = 1, currency_name = "USD"):
+def convert_to_usd(value: float = 1, currency_name: str = "USD") -> float:
+    """
+    Convert currency value to USD.
+    
+    Args:
+        value: Amount to convert
+        currency_name: Source currency code
+        
+    Returns:
+        float: Value in USD
+    """
     usd_value = converter.convert(currency_name, 'USD', value)
     return usd_value
 
 def fetch_channel_name(channel_id: str) -> str:
+    """
+    Fetch channel name from YouTube channel ID.
+    
+    Args:
+        channel_id: YouTube channel ID
+        
+    Returns:
+        str: Channel name or "Unknown Channel" if not found
+    """
     url = f"https://www.youtube.com/channel/{channel_id}"
     ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -491,41 +795,76 @@ def fetch_channel_name(channel_id: str) -> str:
         return info.get("uploader", "Unknown Channel")
 
 def fetch_video_name(video_id: str) -> str:
-    return(get_video_name_fromID(video_id))
+    """
+    Fetch video name from YouTube video ID.
+    
+    Args:
+        video_id: YouTube video ID
+        
+    Returns:
+        str: Video title
+    """
+    return get_video_name_fromID(video_id)
 
-def refresh_banned_users_list():
+# =============================================================================
+# GUI LIST MANAGEMENT FUNCTIONS
+# =============================================================================
+
+def refresh_banned_users_list() -> None:
+    """Update the banned users list in the GUI."""
     configure_item("banned_users_list",
                    items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS])
 
-def refresh_banned_ids_list():
+def refresh_banned_ids_list() -> None:
+    """Update the banned video IDs list in the GUI."""
     configure_item("banned_ids_list",
                    items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS])
     
-def refresh_whitelisted_users_list():
+def refresh_whitelisted_users_list() -> None:
+    """Update the whitelisted users list in the GUI."""
     configure_item("whitelisted_users_list",
                    items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS])
 
-def refresh_whitelisted_ids_list():
+def refresh_whitelisted_ids_list() -> None:
+    """Update the whitelisted video IDs list in the GUI."""
     configure_item("whitelisted_ids_list",
                    items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS])
+
+# =============================================================================
+# DATA PERSISTENCE FUNCTIONS
+# =============================================================================
     
-def save_banned_users():
+def save_banned_users() -> None:
+    """Save banned users list to file."""
     with open(BANNED_USERS_PATH, "w", encoding="utf-8") as f:
         json.dump(BANNED_USERS, f, indent=4)
     
-def save_banned_ids():
+def save_banned_ids() -> None:
+    """Save banned video IDs list to file."""
     with open(BANNED_IDS_PATH, "w", encoding="utf-8") as f:
         json.dump(BANNED_IDS, f, indent=4)
 
-def save_whitelisted_users():
+def save_whitelisted_users() -> None:
+    """Save whitelisted users list to file."""
     with open(WHITELISTED_USERS_PATH, "w", encoding="utf-8") as f:
         json.dump(WHITELISTED_USERS, f, indent=4)
     
-def save_whitelisted_ids():
+def save_whitelisted_ids() -> None:
+    """Save whitelisted video IDs list to file."""
     with open(WHITELISTED_IDS_PATH, "w", encoding="utf-8") as f:
         json.dump(WHITELISTED_IDS, f, indent=4)
 
-def ban_user_callback():
+# =============================================================================
+# BAN/UNBAN CALLBACK FUNCTIONS
+# =============================================================================
+
+def ban_user_callback() -> None:
+    """
+    Handle banning a user from the GUI.
+    
+    Adds user to banned list immediately with placeholder name,
+    then fetches real channel name in background thread.
+    """
     global BANNED_USERS
     user_to_ban = get_value("ban_user_input").strip()
     if user_to_ban and all(u["id"] != user_to_ban for u in BANNED_USERS):
@@ -535,7 +874,7 @@ def ban_user_callback():
         refresh_banned_users_list()
         set_value("ban_user_input", "")  # clear input
 
-        # Fetch in background
+        # Fetch real channel name in background
         def fetch_and_update():
             try:
                 real_name = fetch_channel_name(user_to_ban)
@@ -552,7 +891,13 @@ def ban_user_callback():
 
         threading.Thread(target=fetch_and_update, daemon=True).start()
 
-def ban_id_callback():
+def ban_id_callback() -> None:
+    """
+    Handle banning a video ID from the GUI.
+    
+    Adds video to banned list immediately with placeholder name,
+    then fetches real video name in background thread.
+    """
     global BANNED_IDS
     id_to_ban = get_value("ban_id_input").strip()
     if id_to_ban and all(u["id"] != id_to_ban for u in BANNED_IDS):
@@ -562,11 +907,11 @@ def ban_id_callback():
         refresh_banned_ids_list()
         set_value("ban_id_input", "")  # clear input
 
-        # Fetch in background
+        # Fetch real video name in background
         def fetch_and_update():
             try:
                 real_name = fetch_video_name(id_to_ban)
-                # Update the entry in BANNED_USERS
+                # Update the entry in BANNED_IDS
                 for u in BANNED_IDS:
                     if u["id"] == id_to_ban:
                         u["name"] = real_name
@@ -575,11 +920,17 @@ def ban_id_callback():
                 # Update the listbox in the GUI thread
                 refresh_banned_ids_list()
             except Exception as e:
-                logging.error(f"Error fetching channel name for {id_to_ban}: {e}")
+                logging.error(f"Error fetching video name for {id_to_ban}: {e}")
 
         threading.Thread(target=fetch_and_update, daemon=True).start()
 
-def whitelist_user_callback():
+def whitelist_user_callback() -> None:
+    """
+    Handle whitelisting a user from the GUI.
+    
+    Adds user to whitelisted list immediately with placeholder name,
+    then fetches real channel name in background thread.
+    """
     global WHITELISTED_USERS
     user_to_whitelist = get_value("whitelist_user_input").strip()
     if user_to_whitelist and all(u["id"] != user_to_whitelist for u in WHITELISTED_USERS):
@@ -589,7 +940,7 @@ def whitelist_user_callback():
         refresh_whitelisted_users_list()
         set_value("whitelist_user_input", "")  # clear input
 
-        # Fetch in background
+        # Fetch real channel name in background
         def fetch_and_update():
             try:
                 real_name = fetch_channel_name(user_to_whitelist)
@@ -606,7 +957,13 @@ def whitelist_user_callback():
 
         threading.Thread(target=fetch_and_update, daemon=True).start()
 
-def whitelist_id_callback():
+def whitelist_id_callback() -> None:
+    """
+    Handle whitelisting a video ID from the GUI.
+    
+    Adds video to whitelisted list immediately with placeholder name,
+    then fetches real video name in background thread.
+    """
     global WHITELISTED_IDS
     id_to_whitelist = get_value("whitelist_id_input").strip()
     if id_to_whitelist and all(u["id"] != id_to_whitelist for u in WHITELISTED_IDS):
@@ -616,7 +973,7 @@ def whitelist_id_callback():
         refresh_whitelisted_ids_list()
         set_value("whitelist_id_input", "")  # clear input
 
-        # Fetch in background
+        # Fetch real video name in background
         def fetch_and_update():
             try:
                 real_name = fetch_video_name(id_to_whitelist)
@@ -629,59 +986,71 @@ def whitelist_id_callback():
                 # Update the listbox in the GUI thread
                 refresh_whitelisted_ids_list()
             except Exception as e:
-                logging.error(f"Error fetching channel name for {id_to_whitelist}: {e}")
+                logging.error(f"Error fetching video name for {id_to_whitelist}: {e}")
 
         threading.Thread(target=fetch_and_update, daemon=True).start()
 
-def unban_user_callback():
+def unban_user_callback() -> None:
+    """Remove selected user from banned users list."""
     global BANNED_USERS
     selected = get_value("banned_users_list")
     if selected:
-        # Extract ID from "Name (ID)"
+        # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
         save_banned_users()
         refresh_banned_users_list()
 
-def unban_id_callback():
+def unban_id_callback() -> None:
+    """Remove selected video ID from banned video IDs list."""
     global BANNED_IDS
     selected = get_value("banned_ids_list")
     if selected:
-        # Extract ID from "Name (ID)"
+        # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         BANNED_IDS = [u for u in BANNED_IDS if u["id"] != selected_id]
         save_banned_ids()
         refresh_banned_ids_list()
 
-def unwhitelist_user_callback():
+def unwhitelist_user_callback() -> None:
+    """Remove selected user from whitelisted users list."""
     global WHITELISTED_USERS
     selected = get_value("whitelisted_users_list")
     if selected:
-        # Extract ID from "Name (ID)"
+        # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         WHITELISTED_USERS = [u for u in WHITELISTED_USERS if u["id"] != selected_id]
         save_whitelisted_users()
         refresh_whitelisted_users_list()
 
-def unwhitelist_id_callback():
+def unwhitelist_id_callback() -> None:
+    """Remove selected video ID from whitelisted video IDs list."""
     global WHITELISTED_IDS
     selected = get_value("whitelisted_ids_list")
     if selected:
-        # Extract ID from "Name (ID)"
+        # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         WHITELISTED_IDS = [u for u in WHITELISTED_IDS if u["id"] != selected_id]
         save_whitelisted_ids()
         refresh_whitelisted_ids_list()
-# ---------------------- GUI ----------------------
+# =============================================================================
+# GUI INITIALIZATION & THEMES
+# =============================================================================
+
+# Initialize DearPyGui context
 create_context()
+
+# GUI state variables
 now_playing_text = None
 song_slider_tag = "song_slider"
 ignore_slider_callback = False
 
+# Theme variables
 dark_theme = None
 light_theme = None
 
-def create_dark_theme():
+def create_dark_theme() -> None:
+    """Create and configure the dark theme for the GUI."""
     with theme(tag="dark_theme"):
         with theme_component(mvAll):
             add_theme_color(mvThemeCol_WindowBg, (30, 30, 30, 255))
@@ -693,7 +1062,8 @@ def create_dark_theme():
             add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
             add_theme_color(mvThemeCol_Header, (70, 70, 70, 255))
 
-def create_light_theme():
+def create_light_theme() -> None:
+    """Create and configure the light theme for the GUI."""
     with theme(tag="light_theme"):
         with theme_component(mvAll):
             add_theme_color(mvThemeCol_WindowBg, (240, 240, 240, 255))
@@ -705,15 +1075,34 @@ def create_light_theme():
             add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
             add_theme_color(mvThemeCol_Header, (200, 200, 200, 255))
 
-def apply_theme(theme_tag):
+def apply_theme(theme_tag: str) -> None:
+    """
+    Apply the specified theme to the GUI.
+    
+    Args:
+        theme_tag: Theme identifier ("dark_theme" or "light_theme")
+    """
     bind_theme(theme_tag)
 
 
-def toggle_theme(sender, app_data, user_data):
+# =============================================================================
+# THEME MANAGEMENT FUNCTIONS
+# =============================================================================
+
+def toggle_theme(sender, app_data, user_data) -> None:
+    """
+    Toggle between dark and light themes.
+    
+    Args:
+        sender: GUI element that triggered the callback (unused)
+        app_data: Additional data (unused)
+        user_data: Additional user data (unused)
+    """
     global DARK_MODE
     DARK_MODE = not DARK_MODE
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
 
+    # Save theme preference to config
     updated_config = {
         "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
         "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
@@ -729,16 +1118,22 @@ def toggle_theme(sender, app_data, user_data):
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
         "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
         "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
-
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
 
-def set_theme(dark_mode):
+def set_theme(dark_mode: bool) -> None:
+    """
+    Set the theme based on the provided mode.
+    
+    Args:
+        dark_mode: True for dark theme, False for light theme
+    """
     global DARK_MODE
     DARK_MODE = dark_mode
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
 
+    # Save theme preference to config
     updated_config = {
         "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
         "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
@@ -758,13 +1153,27 @@ def set_theme(dark_mode):
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
 
-def build_gui():
+# =============================================================================
+# GUI CONSTRUCTION FUNCTIONS
+# =============================================================================
+
+def build_gui() -> None:
+    """
+    Build and display the main application GUI.
+    
+    Creates the main control panel window with all controls for managing
+    the music queue, settings, and user/video management.
+    """
     create_context()
     global now_playing_text
 
-    def update_settings_from_menu():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST
+    def update_settings_from_menu() -> None:
+        """Update configuration from GUI settings and save to file."""
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+        global ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
+        global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
         
+        # Update global variables from GUI inputs
         RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
         TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
         PREFIX = get_value("prefix_input")
@@ -777,6 +1186,7 @@ def build_gui():
         ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
         AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
 
+        # Save updated configuration to file
         updated_config = {
             "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
             "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
@@ -796,23 +1206,34 @@ def build_gui():
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
 
+    # =============================================================================
+    # MAIN WINDOW CONSTRUCTION
+    # =============================================================================
+    
     with window(label="YTLM Control Panel", tag="MainWindow", width=670, height=350, pos=(100, 100)):
         set_primary_window("MainWindow", True)
 
         add_spacer(height=10)
 
-        # Now Playing Text
+        # =============================================================================
+        # NOW PLAYING DISPLAY
+        # =============================================================================
+        
         now_playing_text = add_text("Now Playing: Nothing", wrap=600)
         add_separator()
         add_spacer(height=10)
 
-        # Playback Buttons
+        # =============================================================================
+        # PLAYBACK CONTROLS
+        # =============================================================================
+        
         with group(horizontal=True):
             add_button(label="Play / Pause", callback=lambda: player.pause(), width=120, tag="play_button")
             add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=100, tag="prev_button")
             add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=100, tag="next_button")
             add_button(label="Refresh", callback=update_now_playing, width=100, tag="refresh_button")
 
+            # Tooltips for playback controls
             with tooltip("play_button"):
                 add_text("Play/Pause the current song")
             with tooltip("prev_button"):
@@ -824,51 +1245,86 @@ def build_gui():
 
         add_spacer(height=15)
 
-        # Volume Control
+        # =============================================================================
+        # VOLUME CONTROL
+        # =============================================================================
+        
         add_text("Volume")
-        add_slider_float(label="", default_value=config["VOLUME"], min_value=0.0, max_value=100.0, width=400, callback=on_volume_change, format="%.0f")
+        add_slider_float(label="", default_value=config["VOLUME"], min_value=0.0, max_value=100.0, 
+                        width=400, callback=on_volume_change, format="%.0f")
 
         add_spacer(height=15)
 
-        # Song Progress
+        # =============================================================================
+        # SONG PROGRESS CONTROL
+        # =============================================================================
+        
         add_text("Song Progress")
         with group(horizontal=True):
             add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
                              width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
 
+        # =============================================================================
+        # CONFIGURATION MANAGEMENT
+        # =============================================================================
+        
         add_button(label="Reload config", callback=load_config, width=120, tag="reload_config")
         with tooltip("reload_config"):
-                add_text("Reloads the current config from the file")
+            add_text("Reloads the current config from the file")
 
+
+        # =============================================================================
+        # USER/VIDEO MANAGEMENT BUTTONS
+        # =============================================================================
+        
+        with group(horizontal=True):
+            add_button(label="Manage Banned Users", 
+                      callback=lambda: (load_banned_users(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
+            add_button(label="Manage Banned Videos", 
+                      callback=lambda: (load_banned_ids(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
 
         with group(horizontal=True):
-            add_button(label="Manage Banned Users", callback=lambda: (load_banned_users(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
-            add_button(label="Manage Banned Videos", callback=lambda: (load_banned_ids(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
-
-        with group(horizontal=True):
-            add_button(label="Manage Whitelisted Users", callback=lambda: (load_whitelisted_users(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
-            add_button(label="Manage Whitelisted Videos", callback=lambda: (load_whitelisted_ids(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
+            add_button(label="Manage Whitelisted Users", 
+                      callback=lambda: (load_whitelisted_users(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
+            add_button(label="Manage Whitelisted Videos", 
+                      callback=lambda: (load_whitelisted_ids(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
 
 
 
+        # =============================================================================
+        # SETTINGS PANEL
+        # =============================================================================
+        
         with collapsing_header(label="Settings"):
+            # Command configuration
             add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
             add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
             add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
+            
+            # Notification settings
             add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+            
+            # Request permissions
             add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
             add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
             add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
             add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
+            
+            # Whitelist enforcement
             add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
             add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+            
+            # Queue management
             add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
 
-            
             add_spacer(height=10)
             add_button(label="Update Settings", callback=update_settings_from_menu)
 
+            # =============================================================================
+            # SETTINGS TOOLTIPS
+            # =============================================================================
+            
             with tooltip("prefix_input"):
                 add_text("The prefix before a command, useful if you already have another chatbot")
                 add_text("Can be any number of alphanumerical characters")
@@ -893,25 +1349,35 @@ def build_gui():
                 add_text("Whether or not to enforce the song ID Whitelist")
             with tooltip("autoremove_songs_checkbox"):
                 add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
-            
 
-
-                
+        # =============================================================================
+        # THEME AND CONTROL BUTTONS
+        # =============================================================================
+        
         add_spacer(height=20)
-
         add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200, tag="dark_mode_toggle")
-
         with tooltip("dark_mode_toggle"):
             add_text("Toggles dark mode")
 
         add_spacer(height=20)
-
-        # Quit Button
         add_button(label="Quit", callback=lambda: quit_program(), width=100)
 
+        # =============================================================================
+        # CONSOLE OUTPUT
+        # =============================================================================
+        
         add_input_text(label="", tag="console_text", multiline=True, readonly=True, height=200, width=1300)
         
+        # =============================================================================
+        # GUI LOGGER CLASS
+        # =============================================================================
+        
         class GuiLogger(logging.Handler):
+            """
+            Custom logging handler that displays log messages in the GUI console.
+            
+            Keeps only the last 100 log lines to prevent memory issues.
+            """
             def emit(self, record):
                 try:
                     msg = self.format(record)
@@ -926,20 +1392,26 @@ def build_gui():
                 except Exception:
                     pass
 
+        # Set up GUI logging
         gui_handler = GuiLogger()
         gui_handler.setLevel(logging.INFO)
         gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(gui_handler)
 
+        # =============================================================================
+        # BANNED USERS MANAGEMENT WINDOW
+        # =============================================================================
+        
         with window(label="Banned Users", tag="BannedUsersWindow", show=False, width=400, height=400):
             add_text("Manage Banned Users")
             add_separator()
 
-            # List banned users
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS], tag="banned_users_list", width=350, num_items=8)
+            # Display banned users list
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS], 
+                       tag="banned_users_list", width=350, num_items=8)
             add_spacer(height=10)
 
-            # Input for adding user
+            # Add new banned user
             add_input_text(label="Add User ID", tag="ban_user_input", width=250)
             add_button(label="Ban User", callback=lambda: ban_user_callback())
 
@@ -952,36 +1424,45 @@ def build_gui():
             add_button(label="Close", callback=lambda: configure_item("BannedUsersWindow", show=False))
 
 
-        with window(label="Banned IDs", tag="BannedIDsWindow", show=False, width=400, height=400):
-            add_text("Manage Banned IDs")
+        # =============================================================================
+        # BANNED VIDEOS MANAGEMENT WINDOW
+        # =============================================================================
+        
+        with window(label="Banned Videos", tag="BannedIDsWindow", show=False, width=400, height=400):
+            add_text("Manage Banned Videos")
             add_separator()
 
-            # List banned users
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS], tag="banned_ids_list", width=350, num_items=8)
+            # Display banned videos list
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS], 
+                       tag="banned_ids_list", width=350, num_items=8)
             add_spacer(height=10)
 
-            # Input for adding user
+            # Add new banned video
             add_input_text(label="Add Video ID", tag="ban_id_input", width=250)
             add_button(label="Ban Video", callback=lambda: ban_id_callback())
 
             add_spacer(height=10)
 
-            # Remove selected user
+            # Remove selected video
             add_button(label="Unban Selected", callback=lambda: unban_id_callback())
 
             add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
+            add_button(label="Close", callback=lambda: configure_item("BannedIDsWindow", show=False))
 
-
+        # =============================================================================
+        # WHITELISTED USERS MANAGEMENT WINDOW
+        # =============================================================================
+        
         with window(label="Whitelisted Users", tag="WhitelistedUsersWindow", show=False, width=400, height=400):
             add_text("Manage Whitelisted Users")
             add_separator()
 
-            # List banned users
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS], tag="whitelisted_users_list", width=350, num_items=8)
+            # Display whitelisted users list
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS], 
+                       tag="whitelisted_users_list", width=350, num_items=8)
             add_spacer(height=10)
 
-            # Input for adding user
+            # Add new whitelisted user
             add_input_text(label="Add User ID", tag="whitelist_user_input", width=250)
             add_button(label="Whitelist User", callback=lambda: whitelist_user_callback())
 
@@ -993,26 +1474,35 @@ def build_gui():
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("WhitelistedUsersWindow", show=False))
 
-        with window(label="Whitelisted IDs", tag="WhitelistedIDsWindow", show=False, width=400, height=400):
-            add_text("Manage Whitelisted IDs")
+        # =============================================================================
+        # WHITELISTED VIDEOS MANAGEMENT WINDOW
+        # =============================================================================
+        
+        with window(label="Whitelisted Videos", tag="WhitelistedIDsWindow", show=False, width=400, height=400):
+            add_text("Manage Whitelisted Videos")
             add_separator()
 
-            # List banned users
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS], tag="whitelisted_ids_list", width=350, num_items=8)
+            # Display whitelisted videos list
+            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS], 
+                       tag="whitelisted_ids_list", width=350, num_items=8)
             add_spacer(height=10)
 
-            # Input for adding user
+            # Add new whitelisted video
             add_input_text(label="Add Video ID", tag="whitelist_id_input", width=250)
             add_button(label="Whitelist Video", callback=lambda: whitelist_id_callback())
 
             add_spacer(height=10)
 
-            # Remove selected user
+            # Remove selected video
             add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_id_callback())
 
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
 
+    # =============================================================================
+    # GUI FINALIZATION
+    # =============================================================================
+    
     create_dark_theme()
     create_light_theme()
     create_viewport(title='LYTE Control Panel', width=1330, height=750)
@@ -1024,10 +1514,20 @@ def build_gui():
     start_dearpygui()
     destroy_context()
 
-def show_config_menu(invalid_id=False):
+def show_config_menu(invalid_id: bool = False) -> None:
+    """
+    Display the initial configuration menu.
+    
+    Args:
+        invalid_id: Whether to show an invalid ID warning
+    """
     create_context()
-    def save_and_start_callback():
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND, DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST
+    
+    def save_and_start_callback() -> None:
+        """Save configuration and start the application."""
+        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
+        global DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT
+        global MINIMUM_SUPERCHAT, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST, AUTOREMOVE_SONGS
 
         # Update in-memory config from GUI values
         YOUTUBE_VIDEO_ID = get_value("id_input")
@@ -1042,7 +1542,6 @@ def show_config_menu(invalid_id=False):
         ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
         ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
         AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
-
 
         # Save config to file
         updated_config = {
@@ -1141,24 +1640,45 @@ def show_config_menu(invalid_id=False):
     destroy_context()
 
 
-# ---------------------- Threads ----------------------
+# =============================================================================
+# BACKGROUND THREADING FUNCTIONS
+# =============================================================================
 
-def poll_chat():
+def poll_chat() -> None:
+    """
+    Poll YouTube live chat for new messages.
+    
+    Runs in a background thread to continuously check for new chat messages
+    and process song queue requests.
+    """
     while not should_exit:
         if chat.is_alive():
             for message in chat.get().sync_items():
                 on_chat_message(message)
         time.sleep(1)
 
-def vlc_loop():
+def vlc_loop() -> None:
+    """
+    Monitor VLC player state and handle automatic playback.
+    
+    Runs in a background thread to ensure continuous playback when songs end
+    and there are more songs in the queue.
+    """
     while not should_exit:
         if player.get_state() == vlc.State.Ended and media_list.count() > 0:
             player.play()
         time.sleep(1)
 
-def update_slider_thread():
+def update_slider_thread() -> None:
+    """
+    Update the song progress slider in real-time.
+    
+    Runs in a background thread to continuously update the progress slider
+    and time display, respecting user input to prevent conflicts.
+    """
     global ignore_slider_callback, last_gui_update_time
 
+    # Wait for GUI to be ready
     while not does_item_exist(song_slider_tag) and not should_exit:
         time.sleep(0.1)
 
@@ -1183,17 +1703,26 @@ def update_slider_thread():
         # Update time text regardless
         set_value("song_time_text", f"{format_time(curr)} / {format_time(total)}")
 
-def update_now_playing_thread():
+def update_now_playing_thread() -> None:
+    """
+    Update the 'Now Playing' display periodically.
+    
+    Runs in a background thread to keep the current song information
+    displayed in the GUI up to date.
+    """
     while not should_exit:
         update_now_playing()
         time.sleep(1)
 
 
-# ---------------------- Startup ----------------------
+# =============================================================================
+# APPLICATION STARTUP
+# =============================================================================
 
 # Show configuration editor first
 show_config_menu()
 
+# Wait for valid configuration
 while not config_success and not should_exit:
     load_config()
     if initialize_chat():
@@ -1201,13 +1730,16 @@ while not config_success and not should_exit:
     logging.warning("Chat init failed. Reloading config window.")
     show_config_menu(invalid_id=True)
 
+# Load final configuration
 load_config()
 
+# Start all background threads
 threading.Thread(target=build_gui, daemon=True).start()
 threading.Thread(target=vlc_loop, daemon=True).start()
 threading.Thread(target=poll_chat, daemon=True).start()
 threading.Thread(target=update_slider_thread, daemon=True).start()
 threading.Thread(target=update_now_playing_thread, daemon=True).start()
 
+# Main application loop
 while not should_exit:
     time.sleep(1)
