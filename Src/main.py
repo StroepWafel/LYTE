@@ -47,6 +47,9 @@ converter = forex_python.converter.CurrencyRates()
 # GLOBAL CONSTANTS & PATHS
 # =============================================================================
 
+# Application version
+CURRENT_VERSION = "1.6.0"
+
 # Application paths
 APP_FOLDER = get_app_folder()
 LOG_FOLDER = os.path.join(APP_FOLDER, 'logs')
@@ -764,6 +767,221 @@ def update_now_playing() -> None:
 # UTILITY FUNCTIONS
 # =============================================================================
 
+def compare_versions(version1: str, version2: str) -> int:
+    """
+    Compare two version strings.
+    
+    Args:
+        version1: First version string (e.g., "1.5.0")
+        version2: Second version string (e.g., "1.6.0")
+        
+    Returns:
+        int: -1 if version1 < version2, 0 if equal, 1 if version1 > version2
+    """
+    def version_tuple(v):
+        # Remove any non-numeric suffixes (like "-Release", "-beta", etc.)
+        # and split by dots, converting to integers
+        clean_version = v.split('-')[0].split('_')[0]  # Remove suffixes after - or _
+        parts = clean_version.split('.')
+        
+        # Convert each part to int, handling cases where parts might be empty
+        result = []
+        for part in parts:
+            if part.isdigit():
+                result.append(int(part))
+            else:
+                # If any part is not a digit, treat as 0
+                result.append(0)
+        return tuple(result)
+    
+    v1_tuple = version_tuple(version1)
+    v2_tuple = version_tuple(version2)
+    
+    if v1_tuple < v2_tuple:
+        return -1
+    elif v1_tuple > v2_tuple:
+        return 1
+    else:
+        return 0
+
+def fetch_latest_version() -> str:
+    """
+    Fetch the latest release version from GitHub API.
+    
+    Returns:
+        str: Latest version string, or empty string if failed
+    """
+    try:
+        url = "https://api.github.com/repos/StroepWafel/LYTE/releases/latest"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        latest_version = data.get("tag_name", "")
+        
+        # Remove 'v' prefix if present
+        if latest_version.startswith("v"):
+            latest_version = latest_version[1:]
+            
+        logging.info(f"Latest version available: {latest_version}")
+        return latest_version
+        
+    except Exception as e:
+        logging.warning(f"Failed to fetch latest version: {e}")
+        return ""
+
+def run_installer() -> None:
+    """
+    Run the downloaded installer.
+    """
+    try:
+        installer_path = os.path.join(APP_FOLDER, "LYTE_Installer.exe")
+        
+        if os.path.exists(installer_path):
+            logging.info("Running installer...")
+            os.startfile(installer_path)  # Windows-specific
+            logging.info("Installer started successfully")
+        else:
+            logging.error("Installer not found. Please download it first.")
+            if does_item_exist("download_status"):
+                set_value("download_status", "Installer not found. Please download it first.")
+                
+    except Exception as e:
+        logging.error(f"Error running installer: {e}")
+        if does_item_exist("download_status"):
+            set_value("download_status", f"Error running installer: {str(e)}")
+
+def download_installer() -> None:
+    """
+    Start downloading the latest installer from GitHub in a background thread.
+    """
+    # Start download in background thread
+    threading.Thread(target=_download_installer_worker, daemon=True).start()
+
+def _download_installer_worker() -> None:
+    """
+    Worker function that downloads the installer in the background.
+    """
+    try:
+        installer_url = "https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/download/latest/LYTE_Installer.exe"
+        download_path = os.path.join(APP_FOLDER, "LYTE_Installer.exe")
+        
+        logging.info("Starting installer download...")
+        
+        # Update GUI to show download progress
+        if does_item_exist("download_status"):
+            set_value("download_status", "Downloading installer...")
+        
+        response = requests.get(installer_url, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded_size = 0
+        
+        with open(download_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    file.write(chunk)
+                    downloaded_size += len(chunk)
+                    
+                    # Update progress if GUI elements exist
+                    if does_item_exist("download_progress") and total_size > 0:
+                        progress = (downloaded_size / total_size) * 100
+                        set_value("download_progress", progress)
+                    
+                    if does_item_exist("download_status"):
+                        if total_size > 0:
+                            set_value("download_status", f"Downloading... {downloaded_size // 1024 // 1024}MB / {total_size // 1024 // 1024}MB")
+                        else:
+                            set_value("download_status", f"Downloading... {downloaded_size // 1024 // 1024}MB")
+        
+        logging.info(f"Installer downloaded successfully to: {download_path}")
+        
+        # Update GUI to show completion
+        if does_item_exist("download_status"):
+            set_value("download_status", "Download complete! Run LYTE_Installer.exe to update.")
+        
+        # Add run installer button
+        if not does_item_exist("run_installer_button"):
+            add_button(label="Run Installer", callback=run_installer, 
+                      width=150, tag="run_installer_button", parent="MainWindow")
+            with tooltip("run_installer_button"):
+                add_text("Run the downloaded installer to update LYTE")
+        
+        # Show notification
+        if TOAST_NOTIFICATIONS:
+            notification.notify(
+                title="LYTE Installer Downloaded",
+                message=f"Installer saved to: {download_path}",
+                timeout=5
+            )
+            
+    except Exception as e:
+        logging.error(f"Error downloading installer: {e}")
+        if does_item_exist("download_status"):
+            set_value("download_status", f"Download failed: {str(e)}")
+
+def check_for_updates() -> None:
+    """
+    Check for available updates and notify the user if a new version is available.
+    """
+    try:
+        latest_version = fetch_latest_version()
+        if not latest_version:
+            return
+            
+        if compare_versions(CURRENT_VERSION, latest_version) < 0:
+            logging.info(f"Update available! Current: {CURRENT_VERSION}, Latest: {latest_version}")
+            logging.info("Visit https://github.com/StroepWafel/LYTE/releases/latest to download the update")
+            
+            # Show desktop notification if enabled
+            if TOAST_NOTIFICATIONS:
+                notification.notify(
+                    title="LYTE Update Available",
+                    message=f"Version {latest_version} is now available! Current version: {CURRENT_VERSION}",
+                    timeout=10
+                )
+            
+            # Show download button in GUI
+            show_download_ui(latest_version)
+        else:
+            logging.info(f"LYTE is up to date (version {CURRENT_VERSION})")
+            
+    except Exception as e:
+        logging.error(f"Error checking for updates: {e}")
+
+def show_download_ui(latest_version: str) -> None:
+    """
+    Show download UI elements in the main window.
+    
+    Args:
+        latest_version: The latest version available
+    """
+    try:
+        # Add update notification text
+        if not does_item_exist("update_notification"):
+            add_text(f"Update Available: v{latest_version} (Current: v{CURRENT_VERSION})", 
+                    color=(255, 200, 100), tag="update_notification", parent="MainWindow")
+        
+        # Add download button
+        if not does_item_exist("download_button"):
+            add_button(label="Download Installer", callback=download_installer, 
+                      width=150, tag="download_button", parent="MainWindow")
+            with tooltip("download_button"):
+                add_text("Download the latest installer from GitHub")
+        
+        # Add download status text
+        if not does_item_exist("download_status"):
+            add_text("", tag="download_status", parent="MainWindow")
+        
+        # Add download progress bar
+        if not does_item_exist("download_progress"):
+            add_progress_bar(tag="download_progress", parent="MainWindow", 
+                           default_value=0, width=300)
+            
+    except Exception as e:
+        logging.error(f"Error showing download UI: {e}")
+
 def convert_to_usd(value: float = 1, currency_name: str = "USD") -> float:
     """
     Convert currency value to USD.
@@ -1269,9 +1487,14 @@ def build_gui() -> None:
         # CONFIGURATION MANAGEMENT
         # =============================================================================
         
-        add_button(label="Reload config", callback=load_config, width=120, tag="reload_config")
+        with group(horizontal=True):
+            add_button(label="Reload config", callback=load_config, width=120, tag="reload_config")
+            add_button(label="Check for Updates", callback=check_for_updates, width=150, tag="check_updates")
+        
         with tooltip("reload_config"):
             add_text("Reloads the current config from the file")
+        with tooltip("check_updates"):
+            add_text("Manually check for available updates")
 
 
         # =============================================================================
@@ -1359,14 +1582,14 @@ def build_gui() -> None:
         with tooltip("dark_mode_toggle"):
             add_text("Toggles dark mode")
 
-        add_spacer(height=20)
-        add_button(label="Quit", callback=lambda: quit_program(), width=100)
-
         # =============================================================================
         # CONSOLE OUTPUT
         # =============================================================================
         
         add_input_text(label="", tag="console_text", multiline=True, readonly=True, height=200, width=1300)
+        add_spacer(height=20)
+        add_button(label="Quit", callback=lambda: quit_program(), width=100)
+
         
         # =============================================================================
         # GUI LOGGER CLASS
@@ -1499,6 +1722,13 @@ def build_gui() -> None:
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
 
+        # =============================================================================
+        # VERSION DISPLAY
+        # =============================================================================
+        
+        add_text(f"LYTE Version: {CURRENT_VERSION}", color=(100, 200, 100))
+        add_spacer(height=5)
+    
     # =============================================================================
     # GUI FINALIZATION
     # =============================================================================
@@ -1732,6 +1962,9 @@ while not config_success and not should_exit:
 
 # Load final configuration
 load_config()
+
+# Check for updates in background
+threading.Thread(target=check_for_updates, daemon=True).start()
 
 # Start all background threads
 threading.Thread(target=build_gui, daemon=True).start()
