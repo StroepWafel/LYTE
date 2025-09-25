@@ -6,7 +6,6 @@ from PyInstaller.utils.hooks import collect_all
 dpg_datas, dpg_binaries, dpg_hiddenimports = collect_all('dearpygui')
 
 added_files = [
-    ('src/icons/', 'icons'),
 ]
 
 a = Analysis(
