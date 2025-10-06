@@ -74,19 +74,19 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: 3.1
-
+      
       - name: Generate changelog
         shell: bash
         run: |
-          echo "# Summary: ${{ github.event.inputs.release_summary }}" > CHANGELOG.md
           gem install github_changelog_generator
           github_changelog_generator \
             --user ${{ github.repository_owner }} \
             --project ${{ github.event.repository.name }} \
             --token ${{ secrets.GITHUB_TOKEN }} \
-            --since-tag $(git describe --tags --abbrev=0 --tags --match "v*" || echo "") \
-            --output TEMP_CHANGELOG.md
-          type TEMP_CHANGELOG.md >> CHANGELOG.md
+            --since-tag $(git describe --tags --abbrev=0 --tags 2>/dev/null || echo "") \
+            --output CHANGELOG.md \
+            --verbose
+
 
       - name: Create GitHub Release (with changelog)
         uses: softprops/action-gh-release@v1
