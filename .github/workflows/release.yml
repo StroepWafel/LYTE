@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Needed for changelog generation to see commit history
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -51,8 +53,10 @@ jobs:
         with:
           name: LYTE_Build
           path: dist/LYTE.exe
+
       - name: Set release flags
         id: flags
+        shell: pwsh
         run: |
           $channel = "${{ github.event.inputs.release_channel }}"
           if ($channel -eq "Release") {
@@ -62,29 +66,33 @@ jobs:
             "prerelease=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "draft=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
-            # Dev release
             "prerelease=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             "draft=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
-      - name: Create GitHub Release
+
+      - name: Install Ruby (for changelog generator)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.1
+
+      - name: Generate changelog
+        run: |
+          echo "# Summary: ${{ github.event.inputs.release_summary }}" > CHANGELOG.md
+          gem install github_changelog_generator
+          github_changelog_generator \
+            --user ${{ github.repository_owner }} \
+            --project ${{ github.event.repository.name }} \
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --since-tag $(git describe --tags --abbrev=0 --tags --match "v*" || echo "") \
+            --output TEMP_CHANGELOG.md
+          type TEMP_CHANGELOG.md >> CHANGELOG.md
+
+      - name: Create GitHub Release (with changelog)
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.release_version }}-${{ github.event.inputs.release_channel }}
           name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
-          body: |
-            ## What's New:
-            ### Features:
-            - 
-            ### Under The Hood:
-            - 
-            ## Bugs Squashed:
-            - 
-            
-            ## Other Notes:
-            - 
-            
-            ## New Contributors:
-            - 
+          body_path: CHANGELOG.md
           files: dist/LYTE.exe
           draft: ${{ steps.flags.outputs.draft }}
           prerelease: ${{ steps.flags.outputs.prerelease }}
