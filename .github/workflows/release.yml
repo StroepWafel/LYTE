@@ -76,6 +76,7 @@ jobs:
           ruby-version: 3.1
 
       - name: Generate changelog
+        shell: bash
         run: |
           echo "# Summary: ${{ github.event.inputs.release_summary }}" > CHANGELOG.md
           gem install github_changelog_generator
