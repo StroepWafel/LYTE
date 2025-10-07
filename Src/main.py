@@ -26,14 +26,37 @@ from dearpygui.dearpygui import *  # GUI framework
 import forex_python.converter  # Currency conversion for superchat values
 
 # Local Imports
-from utils import (
-    get_app_folder, ensure_file_exists, ensure_json_valid, format_time,
-    get_video_title, get_video_name_fromID, get_direct_url, 
-    fetch_channel_name, fetch_video_name, compare_versions, 
-    fetch_latest_version, convert_to_usd, load_banned_users, load_banned_ids,
-    load_whitelisted_users, load_whitelisted_ids, save_banned_users,
-    save_banned_ids, save_whitelisted_users, save_whitelisted_ids,
-    run_installer, download_installer_worker, check_for_updates
+from helpers.moderation_helpers import (
+    load_banned_users,
+    load_banned_ids,
+    load_whitelisted_users,
+    load_whitelisted_ids,
+    save_banned_users,
+    save_banned_ids,
+    save_whitelisted_users,
+    save_whitelisted_ids
+)
+from helpers.currency_helpers import (
+    convert_to_usd
+)
+from helpers.youtube_helpers import (
+    get_video_title,
+    get_video_name_fromID,
+    get_direct_url,
+    fetch_channel_name
+)
+from helpers.time_helpers import (
+    format_time
+)
+from helpers.file_helpers import (
+    get_app_folder,
+    ensure_file_exists,
+    ensure_json_valid
+)
+from helpers.update_helpers import (
+    run_installer,
+    download_installer_worker,
+    check_for_updates
 )
 
 # =============================================================================
@@ -81,6 +104,7 @@ logging.getLogger().addHandler(file_handler)
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger('httpx').setLevel(logging.ERROR)
 logging.getLogger('httpcore').setLevel(logging.ERROR)
+logging.getLogger('yt_dlp').setLevel(logging.ERROR)
 
 # =============================================================================
 # GLOBAL STATE VARIABLES
@@ -320,9 +344,6 @@ def load_config() -> None:
     ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
     AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
 
-
-
-
 def quit_program() -> None:
     """
     Gracefully shutdown the application.
@@ -354,7 +375,6 @@ def quit_program() -> None:
 # =============================================================================
 # MEDIA PLAYER UTILITY FUNCTIONS
 # =============================================================================
-
 
 def get_curr_songtime() -> float:
     """
@@ -463,11 +483,6 @@ def show_toast(video_id: str, username: str) -> None:
             message="Adding '" + get_video_name_fromID(video_id) + "' to queue",
             timeout=5
         )
-
-# =============================================================================
-# YOUTUBE INTEGRATION FUNCTIONS
-# =============================================================================
-
 
 # =============================================================================
 # SONG QUEUE MANAGEMENT
@@ -679,11 +694,6 @@ def refresh_whitelisted_ids_list() -> None:
                    items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS])
 
 # =============================================================================
-# DATA PERSISTENCE FUNCTIONS
-# =============================================================================
-    
-
-# =============================================================================
 # BAN/UNBAN CALLBACK FUNCTIONS
 # =============================================================================
 
@@ -739,7 +749,7 @@ def ban_id_callback() -> None:
         # Fetch real video name in background
         def fetch_and_update():
             try:
-                real_name = fetch_video_name(id_to_ban)
+                real_name = get_video_name_fromID(id_to_ban)
                 # Update the entry in BANNED_IDS
                 for u in BANNED_IDS:
                     if u["id"] == id_to_ban:
@@ -805,7 +815,7 @@ def whitelist_id_callback() -> None:
         # Fetch real video name in background
         def fetch_and_update():
             try:
-                real_name = fetch_video_name(id_to_whitelist)
+                real_name = get_video_name_fromID(id_to_whitelist)
                 # Update the entry in WHITELISTED_IDS
                 for u in WHITELISTED_IDS:
                     if u["id"] == id_to_whitelist:
