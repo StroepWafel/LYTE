@@ -1,6 +1,9 @@
 /Src/logs
 /Src/.vscode
+/Src/__pycache__
+/Src/config.json
+/Src/whitelisted_users.json
+/Src/whitelisted_IDs.json
 /.github
 LICENCE
 README.md
-Src/config.json
