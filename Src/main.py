@@ -25,20 +25,21 @@ import vlc  # Media player (python-vlc)
 from dearpygui.dearpygui import *  # GUI framework
 import forex_python.converter  # Currency conversion for superchat values
 
+# Local Imports
+from utils import (
+    get_app_folder, ensure_file_exists, ensure_json_valid, format_time,
+    get_video_title, get_video_name_fromID, get_direct_url, 
+    fetch_channel_name, fetch_video_name, compare_versions, 
+    fetch_latest_version, convert_to_usd, load_banned_users, load_banned_ids,
+    load_whitelisted_users, load_whitelisted_ids, save_banned_users,
+    save_banned_ids, save_whitelisted_users, save_whitelisted_ids,
+    run_installer, download_installer_worker, check_for_updates
+)
+
 # =============================================================================
 # APPLICATION INITIALIZATION & GLOBAL CONSTANTS
 # =============================================================================
 
-def get_app_folder() -> str:
-    """
-    Determine the application folder path.
-    
-    Returns:
-        str: Path to the application directory (executable dir if frozen, script dir otherwise)
-    """
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
 
 # Initialize currency converter for superchat value conversion
 converter = forex_python.converter.CurrencyRates()
@@ -104,74 +105,6 @@ BANNED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
 WHITELISTED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
 WHITELISTED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
 
-def ensure_file_exists(filepath: str, default_content) -> None:
-    """
-    Create a file with default content if it doesn't exist.
-    
-    Args:
-        filepath: Path to the file to create
-        default_content: Default content to write to the file
-    """
-    if not os.path.isfile(filepath):
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(default_content, f, indent=4)
-        logging.info(f"Created missing file: {filepath}")
-
-def ensure_json_valid(filepath: str, default_content: dict) -> None:
-    """
-    Validate and clean a JSON configuration file.
-    
-    This function ensures the JSON file is valid and contains only expected keys.
-    If the file is corrupted or contains extra keys, it will be cleaned up.
-    
-    Args:
-        filepath: Path to the JSON file to validate
-        default_content: Default configuration structure to validate against
-    """
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            try:
-                data = json.load(f)
-            except json.JSONDecodeError:
-                # Reset to defaults if file is corrupted
-                with open(filepath, 'w', encoding='utf-8') as fw:
-                    json.dump(default_content, fw, indent=4)
-                logging.warning(f"Invalid JSON in {filepath}. Resetting to default.")
-                return
-
-        modified = False
-        cleaned_data = {}
-
-        # Copy over valid keys from default_config
-        for key, default_value in default_content.items():
-            if key in data:
-                cleaned_data[key] = data[key]
-            else:
-                cleaned_data[key] = default_value
-                modified = True
-                logging.info(f"Added missing key '{key}' to {filepath}")
-
-        # Check for and remove extra keys
-        extra_keys = set(data.keys()) - set(default_content.keys())
-        if extra_keys:
-            modified = True
-            logging.info(f"Removing extra keys from {filepath}: {extra_keys}")
-
-        if modified:
-            # Create a backup before making changes
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_path = f"{filepath}.backup_{timestamp}.json"
-            with open(backup_path, 'w', encoding='utf-8') as backup_file:
-                json.dump(data, backup_file, indent=4)
-            logging.info(f"Backed up original config file to {backup_path}")
-
-            # Write cleaned data
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(cleaned_data, f, indent=4)
-            logging.info(f"Successfully cleaned and updated {filepath}")
-
-    except Exception as e:
-        logging.error(f"Error validating JSON file {filepath}: {e}")
 
 # =============================================================================
 # DEFAULT CONFIGURATION
@@ -288,61 +221,39 @@ logging.info("Started VLC media player...")
 # DATA MANAGEMENT FUNCTIONS
 # =============================================================================
 
-def load_banned_users() -> None:
-    """
-    Load banned users list from file.
-    
-    Updates the global BANNED_USERS list with data from the banned users JSON file.
-    If the file doesn't exist, initializes an empty list.
-    """
+def load_banned_users_wrapper() -> None:
+    """Load banned users list from file and update global variable."""
     global BANNED_USERS
-    if os.path.exists(BANNED_USERS_PATH):
-        with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
-            BANNED_USERS = json.load(f)
-    else:
-        BANNED_USERS = []
+    BANNED_USERS = load_banned_users(BANNED_USERS_PATH)
 
-def load_banned_ids() -> None:
-    """
-    Load banned video IDs list from file.
-    
-    Updates the global BANNED_IDS list with data from the banned IDs JSON file.
-    If the file doesn't exist, initializes an empty list.
-    """
+def load_banned_ids_wrapper() -> None:
+    """Load banned video IDs list from file and update global variable."""
     global BANNED_IDS
-    if os.path.exists(BANNED_IDS_PATH):
-        with open(BANNED_IDS_PATH, "r", encoding="utf-8") as f:
-            BANNED_IDS = json.load(f)
-    else:
-        BANNED_IDS = []
+    BANNED_IDS = load_banned_ids(BANNED_IDS_PATH)
 
-def load_whitelisted_users() -> None:
-    """
-    Load whitelisted users list from file.
-    
-    Updates the global WHITELISTED_USERS list with data from the whitelisted users JSON file.
-    If the file doesn't exist, initializes an empty list.
-    """
+def load_whitelisted_users_wrapper() -> None:
+    """Load whitelisted users list from file and update global variable."""
     global WHITELISTED_USERS
-    if os.path.exists(WHITELISTED_USERS_PATH):
-        with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
-            WHITELISTED_USERS = json.load(f)
-    else:
-        WHITELISTED_USERS = []
+    WHITELISTED_USERS = load_whitelisted_users(WHITELISTED_USERS_PATH)
 
-def load_whitelisted_ids() -> None:
-    """
-    Load whitelisted video IDs list from file.
-    
-    Updates the global WHITELISTED_IDS list with data from the whitelisted IDs JSON file.
-    If the file doesn't exist, initializes an empty list.
-    """
+def load_whitelisted_ids_wrapper() -> None:
+    """Load whitelisted video IDs list from file and update global variable."""
     global WHITELISTED_IDS
-    if os.path.exists(WHITELISTED_IDS_PATH):
-        with open(WHITELISTED_IDS_PATH, "r", encoding="utf-8") as f:
-            WHITELISTED_IDS = json.load(f)
-    else:
-        WHITELISTED_IDS = []
+    WHITELISTED_IDS = load_whitelisted_ids(WHITELISTED_IDS_PATH)
+
+def download_installer() -> None:
+    """Start downloading the latest installer from GitHub in a background thread."""
+    # Start download in background thread
+    threading.Thread(target=download_installer_worker, args=(APP_FOLDER,), daemon=True).start()
+
+def run_installer_wrapper() -> None:
+    """Run the downloaded installer."""
+    run_installer(APP_FOLDER)
+
+def check_for_updates_wrapper() -> None:
+    """Check for updates with current configuration."""
+    check_for_updates(CURRENT_VERSION, TOAST_NOTIFICATIONS)
+
 
 # =============================================================================
 # APPLICATION CONTROL FUNCTIONS
@@ -389,14 +300,10 @@ def load_config() -> None:
     # Load all configuration files
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
         config = json.load(f)
-    with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
-        BANNED_IDS = json.load(f)
-    with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
-        BANNED_USERS = json.load(f)
-    with open(WHITELISTED_IDS_PATH, 'r', encoding="utf-8") as f:
-        WHITELISTED_IDS = json.load(f)
-    with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
-        WHITELISTED_USERS = json.load(f)
+    BANNED_IDS = load_banned_ids(BANNED_IDS_PATH)
+    BANNED_USERS = load_banned_users(BANNED_USERS_PATH)
+    WHITELISTED_IDS = load_whitelisted_ids(WHITELISTED_IDS_PATH)
+    WHITELISTED_USERS = load_whitelisted_users(WHITELISTED_USERS_PATH)
 
     # Parse configuration values with defaults
     YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
@@ -448,19 +355,6 @@ def quit_program() -> None:
 # MEDIA PLAYER UTILITY FUNCTIONS
 # =============================================================================
 
-def format_time(seconds: float) -> str:
-    """
-    Format time in seconds to MM:SS format.
-    
-    Args:
-        seconds: Time in seconds
-        
-    Returns:
-        str: Formatted time string (MM:SS)
-    """
-    minutes = int(seconds // 60)
-    seconds = int(seconds % 60)
-    return f"{minutes:02d}:{seconds:02d}"
 
 def get_curr_songtime() -> float:
     """
@@ -574,48 +468,6 @@ def show_toast(video_id: str, username: str) -> None:
 # YOUTUBE INTEGRATION FUNCTIONS
 # =============================================================================
 
-def get_video_title(youtube_url: str) -> str:
-    """
-    Extract video title from YouTube URL.
-    
-    Args:
-        youtube_url: Full YouTube URL
-        
-    Returns:
-        str: Video title
-    """
-    ydl_opts = {'quiet': True, 'extract_flat': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
-        return info['title']
-
-def get_video_name_fromID(video_id: str) -> str:
-    """
-    Get video title from YouTube video ID.
-    
-    Args:
-        video_id: YouTube video ID
-        
-    Returns:
-        str: Video title
-    """
-    url = f"https://music.youtube.com/watch?v={video_id}"
-    return get_video_title(url)
-
-def get_direct_url(youtube_url: str) -> str:
-    """
-    Get direct audio stream URL from YouTube URL.
-    
-    Args:
-        youtube_url: Full YouTube URL
-        
-    Returns:
-        str: Direct audio stream URL for VLC playback
-    """
-    ydl_opts = {'format': 'bestaudio'}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=False)
-        return info['url']
 
 # =============================================================================
 # SONG QUEUE MANAGEMENT
@@ -767,188 +619,7 @@ def update_now_playing() -> None:
 # UTILITY FUNCTIONS
 # =============================================================================
 
-def compare_versions(version1: str, version2: str) -> int:
-    """
-    Compare two version strings.
-    
-    Args:
-        version1: First version string (e.g., "1.5.0")
-        version2: Second version string (e.g., "1.6.0")
-        
-    Returns:
-        int: -1 if version1 < version2, 0 if equal, 1 if version1 > version2
-    """
-    def version_tuple(v):
-        # Remove any non-numeric suffixes (like "-Release", "-beta", etc.)
-        # and split by dots, converting to integers
-        clean_version = v.split('-')[0].split('_')[0]  # Remove suffixes after - or _
-        parts = clean_version.split('.')
-        
-        # Convert each part to int, handling cases where parts might be empty
-        result = []
-        for part in parts:
-            if part.isdigit():
-                result.append(int(part))
-            else:
-                # If any part is not a digit, treat as 0
-                result.append(0)
-        return tuple(result)
-    
-    v1_tuple = version_tuple(version1)
-    v2_tuple = version_tuple(version2)
-    
-    if v1_tuple < v2_tuple:
-        return -1
-    elif v1_tuple > v2_tuple:
-        return 1
-    else:
-        return 0
 
-def fetch_latest_version() -> str:
-    """
-    Fetch the latest release version from GitHub API.
-    
-    Returns:
-        str: Latest version string, or empty string if failed
-    """
-    try:
-        url = "https://api.github.com/repos/StroepWafel/LYTE/releases/latest"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        latest_version = data.get("tag_name", "")
-        
-        # Remove 'v' prefix if present
-        if latest_version.startswith("v"):
-            latest_version = latest_version[1:]
-            
-        logging.info(f"Latest version available: {latest_version}")
-        return latest_version
-        
-    except Exception as e:
-        logging.warning(f"Failed to fetch latest version: {e}")
-        return ""
-
-def run_installer() -> None:
-    """
-    Run the downloaded installer.
-    """
-    try:
-        installer_path = os.path.join(APP_FOLDER, "LYTE_Installer.exe")
-        
-        if os.path.exists(installer_path):
-            logging.info("Running installer...")
-            os.startfile(installer_path)  # Windows-specific
-            logging.info("Installer started successfully")
-        else:
-            logging.error("Installer not found. Please download it first.")
-            if does_item_exist("download_status"):
-                set_value("download_status", "Installer not found. Please download it first.")
-                
-    except Exception as e:
-        logging.error(f"Error running installer: {e}")
-        if does_item_exist("download_status"):
-            set_value("download_status", f"Error running installer: {str(e)}")
-
-def download_installer() -> None:
-    """
-    Start downloading the latest installer from GitHub in a background thread.
-    """
-    # Start download in background thread
-    threading.Thread(target=_download_installer_worker, daemon=True).start()
-
-def _download_installer_worker() -> None:
-    """
-    Worker function that downloads the installer in the background.
-    """
-    try:
-        installer_url = "https://github.com/StroepWafel/LYTE-NSIS-Installer/releases/download/latest/LYTE_Installer.exe"
-        download_path = os.path.join(APP_FOLDER, "LYTE_Installer.exe")
-        
-        logging.info("Starting installer download...")
-        
-        # Update GUI to show download progress
-        if does_item_exist("download_status"):
-            set_value("download_status", "Downloading installer...")
-        
-        response = requests.get(installer_url, stream=True, timeout=30)
-        response.raise_for_status()
-        
-        total_size = int(response.headers.get('content-length', 0))
-        downloaded_size = 0
-        
-        with open(download_path, 'wb') as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    file.write(chunk)
-                    downloaded_size += len(chunk)
-                    
-                    # Update progress if GUI elements exist
-                    if does_item_exist("download_progress") and total_size > 0:
-                        progress = (downloaded_size / total_size) * 100
-                        set_value("download_progress", progress)
-                    
-                    if does_item_exist("download_status"):
-                        if total_size > 0:
-                            set_value("download_status", f"Downloading... {downloaded_size // 1024 // 1024}MB / {total_size // 1024 // 1024}MB")
-                        else:
-                            set_value("download_status", f"Downloading... {downloaded_size // 1024 // 1024}MB")
-        
-        logging.info(f"Installer downloaded successfully to: {download_path}")
-        
-        # Update GUI to show completion
-        if does_item_exist("download_status"):
-            set_value("download_status", "Download complete! Run LYTE_Installer.exe to update.")
-        
-        # Add run installer button
-        if not does_item_exist("run_installer_button"):
-            add_button(label="Run Installer", callback=run_installer, 
-                      width=150, tag="run_installer_button", parent="MainWindow")
-            with tooltip("run_installer_button"):
-                add_text("Run the downloaded installer to update LYTE")
-        
-        # Show notification
-        if TOAST_NOTIFICATIONS:
-            notification.notify(
-                title="LYTE Installer Downloaded",
-                message=f"Installer saved to: {download_path}",
-                timeout=5
-            )
-            
-    except Exception as e:
-        logging.error(f"Error downloading installer: {e}")
-        if does_item_exist("download_status"):
-            set_value("download_status", f"Download failed: {str(e)}")
-
-def check_for_updates() -> None:
-    """
-    Check for available updates and notify the user if a new version is available.
-    """
-    try:
-        latest_version = fetch_latest_version()
-        if not latest_version:
-            return
-            
-        if compare_versions(CURRENT_VERSION, latest_version) < 0:
-            logging.info(f"Update available! Current: {CURRENT_VERSION}, Latest: {latest_version}")
-            logging.info("Visit https://github.com/StroepWafel/LYTE/releases/latest to download the update")
-            
-            # Show desktop notification if enabled
-            if TOAST_NOTIFICATIONS:
-                notification.notify(
-                    title="LYTE Update Available",
-                    message=f"Version {latest_version} is now available! Current version: {CURRENT_VERSION}",
-                    timeout=10
-                )
-            
-            # Show download button in GUI
-            show_download_ui(latest_version)
-        else:
-            logging.info(f"LYTE is up to date (version {CURRENT_VERSION})")
-            
-    except Exception as e:
-        logging.error(f"Error checking for updates: {e}")
 
 def show_download_ui(latest_version: str) -> None:
     """
@@ -982,47 +653,6 @@ def show_download_ui(latest_version: str) -> None:
     except Exception as e:
         logging.error(f"Error showing download UI: {e}")
 
-def convert_to_usd(value: float = 1, currency_name: str = "USD") -> float:
-    """
-    Convert currency value to USD.
-    
-    Args:
-        value: Amount to convert
-        currency_name: Source currency code
-        
-    Returns:
-        float: Value in USD
-    """
-    usd_value = converter.convert(currency_name, 'USD', value)
-    return usd_value
-
-def fetch_channel_name(channel_id: str) -> str:
-    """
-    Fetch channel name from YouTube channel ID.
-    
-    Args:
-        channel_id: YouTube channel ID
-        
-    Returns:
-        str: Channel name or "Unknown Channel" if not found
-    """
-    url = f"https://www.youtube.com/channel/{channel_id}"
-    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return info.get("uploader", "Unknown Channel")
-
-def fetch_video_name(video_id: str) -> str:
-    """
-    Fetch video name from YouTube video ID.
-    
-    Args:
-        video_id: YouTube video ID
-        
-    Returns:
-        str: Video title
-    """
-    return get_video_name_fromID(video_id)
 
 # =============================================================================
 # GUI LIST MANAGEMENT FUNCTIONS
@@ -1052,25 +682,6 @@ def refresh_whitelisted_ids_list() -> None:
 # DATA PERSISTENCE FUNCTIONS
 # =============================================================================
     
-def save_banned_users() -> None:
-    """Save banned users list to file."""
-    with open(BANNED_USERS_PATH, "w", encoding="utf-8") as f:
-        json.dump(BANNED_USERS, f, indent=4)
-    
-def save_banned_ids() -> None:
-    """Save banned video IDs list to file."""
-    with open(BANNED_IDS_PATH, "w", encoding="utf-8") as f:
-        json.dump(BANNED_IDS, f, indent=4)
-
-def save_whitelisted_users() -> None:
-    """Save whitelisted users list to file."""
-    with open(WHITELISTED_USERS_PATH, "w", encoding="utf-8") as f:
-        json.dump(WHITELISTED_USERS, f, indent=4)
-    
-def save_whitelisted_ids() -> None:
-    """Save whitelisted video IDs list to file."""
-    with open(WHITELISTED_IDS_PATH, "w", encoding="utf-8") as f:
-        json.dump(WHITELISTED_IDS, f, indent=4)
 
 # =============================================================================
 # BAN/UNBAN CALLBACK FUNCTIONS
@@ -1088,7 +699,7 @@ def ban_user_callback() -> None:
     if user_to_ban and all(u["id"] != user_to_ban for u in BANNED_USERS):
         # Add immediately with placeholder
         BANNED_USERS.append({"id": user_to_ban, "name": "Loading..."})
-        save_banned_users()
+        save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
         refresh_banned_users_list()
         set_value("ban_user_input", "")  # clear input
 
@@ -1101,7 +712,7 @@ def ban_user_callback() -> None:
                     if u["id"] == user_to_ban:
                         u["name"] = real_name
                         break
-                save_banned_users()
+                save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
                 # Update the listbox in the GUI thread
                 refresh_banned_users_list()
             except Exception as e:
@@ -1121,7 +732,7 @@ def ban_id_callback() -> None:
     if id_to_ban and all(u["id"] != id_to_ban for u in BANNED_IDS):
         # Add immediately with placeholder
         BANNED_IDS.append({"id": id_to_ban, "name": "Loading..."})
-        save_banned_ids()
+        save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
         refresh_banned_ids_list()
         set_value("ban_id_input", "")  # clear input
 
@@ -1134,7 +745,7 @@ def ban_id_callback() -> None:
                     if u["id"] == id_to_ban:
                         u["name"] = real_name
                         break
-                save_banned_ids()
+                save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
                 # Update the listbox in the GUI thread
                 refresh_banned_ids_list()
             except Exception as e:
@@ -1154,7 +765,7 @@ def whitelist_user_callback() -> None:
     if user_to_whitelist and all(u["id"] != user_to_whitelist for u in WHITELISTED_USERS):
         # Add immediately with placeholder
         WHITELISTED_USERS.append({"id": user_to_whitelist, "name": "Loading..."})
-        save_whitelisted_users()
+        save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
         refresh_whitelisted_users_list()
         set_value("whitelist_user_input", "")  # clear input
 
@@ -1167,7 +778,7 @@ def whitelist_user_callback() -> None:
                     if u["id"] == user_to_whitelist:
                         u["name"] = real_name
                         break
-                save_whitelisted_users()
+                save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
                 # Update the listbox in the GUI thread
                 refresh_whitelisted_users_list()
             except Exception as e:
@@ -1187,7 +798,7 @@ def whitelist_id_callback() -> None:
     if id_to_whitelist and all(u["id"] != id_to_whitelist for u in WHITELISTED_IDS):
         # Add immediately with placeholder
         WHITELISTED_IDS.append({"id": id_to_whitelist, "name": "Loading..."})
-        save_whitelisted_ids()
+        save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
         refresh_whitelisted_ids_list()
         set_value("whitelist_id_input", "")  # clear input
 
@@ -1200,7 +811,7 @@ def whitelist_id_callback() -> None:
                     if u["id"] == id_to_whitelist:
                         u["name"] = real_name
                         break
-                save_whitelisted_ids()
+                save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
                 # Update the listbox in the GUI thread
                 refresh_whitelisted_ids_list()
             except Exception as e:
@@ -1216,7 +827,7 @@ def unban_user_callback() -> None:
         # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
-        save_banned_users()
+        save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
         refresh_banned_users_list()
 
 def unban_id_callback() -> None:
@@ -1227,7 +838,7 @@ def unban_id_callback() -> None:
         # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         BANNED_IDS = [u for u in BANNED_IDS if u["id"] != selected_id]
-        save_banned_ids()
+        save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
         refresh_banned_ids_list()
 
 def unwhitelist_user_callback() -> None:
@@ -1238,7 +849,7 @@ def unwhitelist_user_callback() -> None:
         # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         WHITELISTED_USERS = [u for u in WHITELISTED_USERS if u["id"] != selected_id]
-        save_whitelisted_users()
+        save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
         refresh_whitelisted_users_list()
 
 def unwhitelist_id_callback() -> None:
@@ -1249,7 +860,7 @@ def unwhitelist_id_callback() -> None:
         # Extract ID from "Name (ID)" format
         selected_id = selected.split("(")[-1].strip(")")
         WHITELISTED_IDS = [u for u in WHITELISTED_IDS if u["id"] != selected_id]
-        save_whitelisted_ids()
+        save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
         refresh_whitelisted_ids_list()
 # =============================================================================
 # GUI INITIALIZATION & THEMES
@@ -1489,7 +1100,7 @@ def build_gui() -> None:
         
         with group(horizontal=True):
             add_button(label="Reload config", callback=load_config, width=120, tag="reload_config")
-            add_button(label="Check for Updates", callback=check_for_updates, width=150, tag="check_updates")
+            add_button(label="Check for Updates", callback=check_for_updates_wrapper, width=150, tag="check_updates")
         
         with tooltip("reload_config"):
             add_text("Reloads the current config from the file")
@@ -1503,15 +1114,15 @@ def build_gui() -> None:
         
         with group(horizontal=True):
             add_button(label="Manage Banned Users", 
-                      callback=lambda: (load_banned_users(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
+                      callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
             add_button(label="Manage Banned Videos", 
-                      callback=lambda: (load_banned_ids(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
+                      callback=lambda: (load_banned_ids_wrapper(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
 
         with group(horizontal=True):
             add_button(label="Manage Whitelisted Users", 
-                      callback=lambda: (load_whitelisted_users(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
+                      callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
             add_button(label="Manage Whitelisted Videos", 
-                      callback=lambda: (load_whitelisted_ids(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
+                      callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
 
 
 
@@ -1964,7 +1575,7 @@ while not config_success and not should_exit:
 load_config()
 
 # Check for updates in background
-threading.Thread(target=check_for_updates, daemon=True).start()
+threading.Thread(target=check_for_updates_wrapper, daemon=True).start()
 
 # Start all background threads
 threading.Thread(target=build_gui, daemon=True).start()
