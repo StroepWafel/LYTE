@@ -15,6 +15,8 @@ import traceback
 from collections import defaultdict
 from datetime import datetime
 from time import time as current_time
+import webbrowser
+
 
 # Third-Party Imports
 import pytchat  # YouTube live chat integration
@@ -892,27 +894,105 @@ def create_dark_theme() -> None:
     """Create and configure the dark theme for the GUI."""
     with theme(tag="dark_theme"):
         with theme_component(mvAll):
-            add_theme_color(mvThemeCol_WindowBg, (30, 30, 30, 255))
-            add_theme_color(mvThemeCol_FrameBg, (50, 50, 50, 255))
-            add_theme_color(mvThemeCol_Button, (70, 70, 70, 255))
-            add_theme_color(mvThemeCol_ButtonHovered, (100, 100, 100, 255))
-            add_theme_color(mvThemeCol_ButtonActive, (120, 120, 120, 255))
-            add_theme_color(mvThemeCol_Text, (220, 220, 220, 255))
-            add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
-            add_theme_color(mvThemeCol_Header, (70, 70, 70, 255))
+            # Modern dark theme with green accent
+            add_theme_color(mvThemeCol_WindowBg, (25, 25, 25, 255))  # Pure dark background
+            add_theme_color(mvThemeCol_FrameBg, (35, 35, 35, 255))   # Slightly lighter frame background
+            add_theme_color(mvThemeCol_Button, (60, 70, 60, 255))    # Dark green-gray button
+            add_theme_color(mvThemeCol_ButtonHovered, (80, 120, 80, 255))  # Green on hover
+            add_theme_color(mvThemeCol_ButtonActive, (100, 150, 100, 255))  # Brighter green when active
+            add_theme_color(mvThemeCol_Text, (220, 220, 220, 255))   # Crisp white text
+            add_theme_color(mvThemeCol_SliderGrab, (100, 150, 100, 255))  # Green for slider
+            add_theme_color(mvThemeCol_SliderGrabActive, (120, 180, 120, 255))  # Brighter green for active slider
+            add_theme_color(mvThemeCol_Header, (40, 40, 40, 255))    # Dark header
+            
+            # Additional modern styling
+            add_theme_color(mvThemeCol_ScrollbarBg, (35, 35, 35, 128))  # Semi-transparent scrollbar bg
+            add_theme_color(mvThemeCol_ScrollbarGrab, (60, 70, 60, 255))  # Matching scrollbar
+            add_theme_color(mvThemeCol_ScrollbarGrabHovered, (80, 120, 80, 255))
+            add_theme_color(mvThemeCol_ScrollbarGrabActive, (100, 150, 100, 255))
+            add_theme_color(mvThemeCol_CheckMark, (100, 150, 100, 255))  # Green checkmarks
+            add_theme_color(mvThemeCol_HeaderHovered, (80, 120, 80, 255))
+            add_theme_color(mvThemeCol_HeaderActive, (100, 150, 100, 255))
+            add_theme_color(mvThemeCol_Tab, (60, 70, 60, 255))
+            add_theme_color(mvThemeCol_TabHovered, (80, 120, 80, 255))
+            add_theme_color(mvThemeCol_TabActive, (100, 150, 100, 255))
+            add_theme_color(mvThemeCol_TitleBg, (25, 25, 25, 255))  # Window title background
+            add_theme_color(mvThemeCol_TitleBgActive, (40, 50, 40, 255))  # Active window title
+            add_theme_color(mvThemeCol_TitleBgCollapsed, (25, 25, 25, 128))  # Collapsed window title
+            add_theme_color(mvThemeCol_MenuBarBg, (30, 30, 30, 255))  # Menu bar background
+            
+            # Border and separator styling
+            add_theme_color(mvThemeCol_Border, (70, 90, 70, 255))
+            add_theme_color(mvThemeCol_Separator, (70, 90, 70, 255))
+            add_theme_color(mvThemeCol_PopupBg, (35, 35, 35, 240))  # Popup background with slight transparency
+            
+            # Input fields
+            add_theme_color(mvThemeCol_TextSelectedBg, (80, 120, 80, 150))  # Text selection background
+            
+            # Style variables for modern look
+            add_theme_style(mvStyleVar_FrameRounding, 8.0)  # More pronounced rounded corners
+            add_theme_style(mvStyleVar_FrameBorderSize, 0.5)  # Thinner borders for cleaner look
+            add_theme_style(mvStyleVar_WindowRounding, 12.0)  # More rounded window corners
+            add_theme_style(mvStyleVar_ScrollbarSize, 12.0)  # Slightly larger scrollbars
+            add_theme_style(mvStyleVar_ScrollbarRounding, 8.0)  # Rounded scrollbars
+            add_theme_style(mvStyleVar_TabRounding, 8.0)  # Rounded tabs
+            add_theme_style(mvStyleVar_GrabRounding, 8.0)  # Rounded grab corners
+            add_theme_style(mvStyleVar_ChildRounding, 8.0)  # Rounded child windows
+            add_theme_style(mvStyleVar_PopupRounding, 8.0)  # Rounded popup windows
+            add_theme_style(mvStyleVar_ItemSpacing, 8, 6)  # Increased spacing between items
+            add_theme_style(mvStyleVar_ItemInnerSpacing, 6, 6)  # Increased inner spacing
 
 def create_light_theme() -> None:
     """Create and configure the light theme for the GUI."""
     with theme(tag="light_theme"):
         with theme_component(mvAll):
-            add_theme_color(mvThemeCol_WindowBg, (240, 240, 240, 255))
-            add_theme_color(mvThemeCol_FrameBg, (220, 220, 220, 255))
-            add_theme_color(mvThemeCol_Button, (200, 200, 200, 255))
-            add_theme_color(mvThemeCol_ButtonHovered, (180, 180, 180, 255))
-            add_theme_color(mvThemeCol_ButtonActive, (150, 150, 150, 255))
-            add_theme_color(mvThemeCol_Text, (20, 20, 20, 255))
-            add_theme_color(mvThemeCol_SliderGrab, (100, 100, 255, 255))
-            add_theme_color(mvThemeCol_Header, (200, 200, 200, 255))
+            # Modern light theme with teal accent
+            add_theme_color(mvThemeCol_WindowBg, (248, 250, 252, 255))  # Very light cool white
+            add_theme_color(mvThemeCol_FrameBg, (235, 242, 248, 255))   # Light blue-white for frames
+            add_theme_color(mvThemeCol_Button, (200, 230, 230, 255))    # Soft teal button
+            add_theme_color(mvThemeCol_ButtonHovered, (150, 210, 210, 255))  # Medium teal on hover
+            add_theme_color(mvThemeCol_ButtonActive, (100, 190, 190, 255))   # Deeper teal when active
+            add_theme_color(mvThemeCol_Text, (40, 50, 60, 255))         # Dark slate text for contrast
+            add_theme_color(mvThemeCol_SliderGrab, (80, 180, 180, 255)) # Teal for slider
+            add_theme_color(mvThemeCol_SliderGrabActive, (60, 160, 160, 255)) # Deeper teal for active slider
+            add_theme_color(mvThemeCol_Header, (220, 240, 240, 255))    # Very light teal header
+            
+            # Additional modern styling
+            add_theme_color(mvThemeCol_ScrollbarBg, (235, 242, 248, 128))  # Semi-transparent scrollbar bg
+            add_theme_color(mvThemeCol_ScrollbarGrab, (180, 220, 220, 255))  # Matching scrollbar
+            add_theme_color(mvThemeCol_ScrollbarGrabHovered, (150, 210, 210, 255))
+            add_theme_color(mvThemeCol_ScrollbarGrabActive, (100, 190, 190, 255))
+            add_theme_color(mvThemeCol_CheckMark, (80, 180, 180, 255))  # Teal checkmarks
+            add_theme_color(mvThemeCol_HeaderHovered, (180, 220, 220, 255))
+            add_theme_color(mvThemeCol_HeaderActive, (150, 210, 210, 255))
+            add_theme_color(mvThemeCol_Tab, (200, 230, 230, 255))
+            add_theme_color(mvThemeCol_TabHovered, (150, 210, 210, 255))
+            add_theme_color(mvThemeCol_TabActive, (100, 190, 190, 255))
+            add_theme_color(mvThemeCol_TitleBg, (235, 242, 248, 255))  # Window title background
+            add_theme_color(mvThemeCol_TitleBgActive, (220, 240, 240, 255))  # Active window title
+            add_theme_color(mvThemeCol_TitleBgCollapsed, (235, 242, 248, 128))  # Collapsed window title
+            add_theme_color(mvThemeCol_MenuBarBg, (220, 240, 240, 255))  # Menu bar background
+            
+            # Border and separator styling
+            add_theme_color(mvThemeCol_Border, (180, 220, 220, 255))
+            add_theme_color(mvThemeCol_Separator, (180, 220, 220, 255))
+            add_theme_color(mvThemeCol_PopupBg, (248, 250, 252, 240))  # Popup background with slight transparency
+            
+            # Input fields
+            add_theme_color(mvThemeCol_TextSelectedBg, (150, 210, 210, 150))  # Text selection background
+            
+            # Style variables for modern look
+            add_theme_style(mvStyleVar_FrameRounding, 8.0)  # More pronounced rounded corners
+            add_theme_style(mvStyleVar_FrameBorderSize, 0.5)  # Thinner borders for cleaner look
+            add_theme_style(mvStyleVar_WindowRounding, 12.0)  # More rounded window corners
+            add_theme_style(mvStyleVar_ScrollbarSize, 12.0)  # Slightly larger scrollbars
+            add_theme_style(mvStyleVar_ScrollbarRounding, 8.0)  # Rounded scrollbars
+            add_theme_style(mvStyleVar_TabRounding, 8.0)  # Rounded tabs
+            add_theme_style(mvStyleVar_GrabRounding, 8.0)  # Rounded grab corners
+            add_theme_style(mvStyleVar_ChildRounding, 8.0)  # Rounded child windows
+            add_theme_style(mvStyleVar_PopupRounding, 8.0)  # Rounded popup windows
+            add_theme_style(mvStyleVar_ItemSpacing, 8, 6)  # Increased spacing between items
+            add_theme_style(mvStyleVar_ItemInnerSpacing, 6, 6)  # Increased inner spacing
 
 def apply_theme(theme_tag: str) -> None:
     """
@@ -992,6 +1072,12 @@ def set_theme(dark_mode: bool) -> None:
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
 
+def open_url(url: str) -> None:
+    """Open a URL in the user's default web browser."""
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
 # =============================================================================
 # GUI CONSTRUCTION FUNCTIONS
 # =============================================================================
@@ -1049,28 +1135,78 @@ def build_gui() -> None:
     # MAIN WINDOW CONSTRUCTION
     # =============================================================================
     
-    with window(label="YTLM Control Panel", tag="MainWindow", width=670, height=350, pos=(100, 100)):
+    with window(label="LYTE Control Panel", tag="MainWindow", width=700, height=380, pos=(100, 100)):
         set_primary_window("MainWindow", True)
 
-        add_spacer(height=10)
+        add_spacer(height=15)
 
+        with menu_bar() as _:
+            with menu(label="File"):
+                add_menu_item(label="Reload Config", callback=load_config, tag="reload_config_menu")
+                add_menu_item(label="Quit", callback=lambda: quit_program(), tag="quit_menu")
+                
+                with tooltip("reload_config_menu"):
+                    add_text("Reload configuration from file")
+                with tooltip("quit_menu"):
+                    add_text("Exit the application")
+                    
+            with menu(label="View"):
+                add_menu_item(label="Toggle Dark/Light Mode", callback=toggle_theme, tag="toggle_theme_menu")
+                
+                with tooltip("toggle_theme_menu"):
+                    add_text("Switch between dark and light themes")
+                    
+            with menu(label="Help"):
+                add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
+                add_separator()
+                add_menu_item(label="Check for Updates", callback=check_for_updates_wrapper, tag="check_updates_menu")
+                add_menu_item(label="Open GitHub Issues", callback=lambda: open_url("https://github.com/StroepWafel/LYTE/issues"), tag="github_issues_menu")
+                
+                with tooltip("version_menu"):
+                    add_text("Current version of LYTE")
+                with tooltip("check_updates_menu"):
+                    add_text("Check if a newer version is available")
+                with tooltip("github_issues_menu"):
+                    add_text("Open the GitHub issues page in your browser")
+                    
+            with menu(label="Moderation"):
+                add_menu_item(label="Manage Banned Users", tag="banned_users_menu",
+                              callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
+                add_menu_item(label="Manage Banned Videos", tag="banned_videos_menu",
+                              callback=lambda: (load_banned_ids_wrapper(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
+                add_menu_item(label="Manage Whitelisted Users", tag="whitelist_users_menu",
+                              callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
+                add_menu_item(label="Manage Whitelisted Videos", tag="whitelist_videos_menu",
+                              callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
+                
+                with tooltip("banned_users_menu"):
+                    add_text("Manage users who are not allowed to request songs")
+                with tooltip("banned_videos_menu"):
+                    add_text("Manage videos that are not allowed to be requested")
+                with tooltip("whitelist_users_menu"):
+                    add_text("Manage users who are allowed to request songs when whitelist is enforced")
+                with tooltip("whitelist_videos_menu"):
+                    add_text("Manage videos that are allowed to be requested when whitelist is enforced")
         # =============================================================================
         # NOW PLAYING DISPLAY
         # =============================================================================
         
         now_playing_text = add_text("Now Playing: Nothing", wrap=600)
         add_separator()
-        add_spacer(height=10)
+        add_spacer(height=15)
 
         # =============================================================================
         # PLAYBACK CONTROLS
         # =============================================================================
         
         with group(horizontal=True):
-            add_button(label="Play / Pause", callback=lambda: player.pause(), width=120, tag="play_button")
-            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=100, tag="prev_button")
-            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=100, tag="next_button")
-            add_button(label="Refresh", callback=update_now_playing, width=100, tag="refresh_button")
+            add_button(label="Play / Pause", callback=lambda: player.pause(), width=130, tag="play_button")
+            add_spacer(width=10)
+            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=110, tag="prev_button")
+            add_spacer(width=10)
+            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=110, tag="next_button")
+            add_spacer(width=10)
+            add_button(label="Refresh", callback=update_now_playing, width=110, tag="refresh_button")
 
             # Tooltips for playback controls
             with tooltip("play_button"):
@@ -1082,7 +1218,7 @@ def build_gui() -> None:
             with tooltip("refresh_button"):
                 add_text("Refresh the song info")
 
-        add_spacer(height=15)
+        add_spacer(height=5)
 
         # =============================================================================
         # VOLUME CONTROL
@@ -1090,9 +1226,12 @@ def build_gui() -> None:
         
         add_text("Volume")
         add_slider_float(label="", default_value=config["VOLUME"], min_value=0.0, max_value=100.0, 
-                        width=400, callback=on_volume_change, format="%.0f")
+                        width=400, callback=on_volume_change, format="%.0f", tag="volume_slider")
+        
+        with tooltip("volume_slider"):
+            add_text("Adjust the playback volume")
 
-        add_spacer(height=15)
+        add_spacer(height=5)
 
         # =============================================================================
         # SONG PROGRESS CONTROL
@@ -1103,38 +1242,11 @@ def build_gui() -> None:
             add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
                              width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
-
-        # =============================================================================
-        # CONFIGURATION MANAGEMENT
-        # =============================================================================
-        
-        with group(horizontal=True):
-            add_button(label="Reload config", callback=load_config, width=120, tag="reload_config")
-            add_button(label="Check for Updates", callback=check_for_updates_wrapper, width=150, tag="check_updates")
-        
-        with tooltip("reload_config"):
-            add_text("Reloads the current config from the file")
-        with tooltip("check_updates"):
-            add_text("Manually check for available updates")
-
-
-        # =============================================================================
-        # USER/VIDEO MANAGEMENT BUTTONS
-        # =============================================================================
-        
-        with group(horizontal=True):
-            add_button(label="Manage Banned Users", 
-                      callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
-            add_button(label="Manage Banned Videos", 
-                      callback=lambda: (load_banned_ids_wrapper(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
-
-        with group(horizontal=True):
-            add_button(label="Manage Whitelisted Users", 
-                      callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
-            add_button(label="Manage Whitelisted Videos", 
-                      callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
-
-
+            
+        with tooltip(song_slider_tag):
+            add_text("Drag to seek to a different position in the song")
+        with tooltip("song_time_text"):
+            add_text("Current position / Total duration")
 
         # =============================================================================
         # SETTINGS PANEL
@@ -1195,22 +1307,13 @@ def build_gui() -> None:
                 add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
 
         # =============================================================================
-        # THEME AND CONTROL BUTTONS
-        # =============================================================================
-        
-        add_spacer(height=20)
-        add_button(label="Toggle Light/Dark Mode", callback=toggle_theme, width=200, tag="dark_mode_toggle")
-        with tooltip("dark_mode_toggle"):
-            add_text("Toggles dark mode")
-
-        # =============================================================================
         # CONSOLE OUTPUT
         # =============================================================================
         
         add_input_text(label="", tag="console_text", multiline=True, readonly=True, height=200, width=1300)
-        add_spacer(height=20)
-        add_button(label="Quit", callback=lambda: quit_program(), width=100)
-
+        
+        with tooltip("console_text"):
+            add_text("Log messages and application status")
         
         # =============================================================================
         # GUI LOGGER CLASS
@@ -1257,12 +1360,19 @@ def build_gui() -> None:
 
             # Add new banned user
             add_input_text(label="Add User ID", tag="ban_user_input", width=250)
-            add_button(label="Ban User", callback=lambda: ban_user_callback())
+            add_button(label="Ban User", callback=lambda: ban_user_callback(), tag="ban_user_button")
 
             add_spacer(height=10)
 
             # Remove selected user
-            add_button(label="Unban Selected", callback=lambda: unban_user_callback())
+            add_button(label="Unban Selected", callback=lambda: unban_user_callback(), tag="unban_user_button")
+            
+            with tooltip("ban_user_input"):
+                add_text("Enter the YouTube user ID to ban")
+            with tooltip("ban_user_button"):
+                add_text("Add the user to the banned list")
+            with tooltip("unban_user_button"):
+                add_text("Remove the selected user from the banned list")
 
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("BannedUsersWindow", show=False))
@@ -1283,12 +1393,19 @@ def build_gui() -> None:
 
             # Add new banned video
             add_input_text(label="Add Video ID", tag="ban_id_input", width=250)
-            add_button(label="Ban Video", callback=lambda: ban_id_callback())
+            add_button(label="Ban Video", callback=lambda: ban_id_callback(), tag="ban_video_button")
 
             add_spacer(height=10)
 
             # Remove selected video
-            add_button(label="Unban Selected", callback=lambda: unban_id_callback())
+            add_button(label="Unban Selected", callback=lambda: unban_id_callback(), tag="unban_video_button")
+            
+            with tooltip("ban_id_input"):
+                add_text("Enter the YouTube video ID to ban")
+            with tooltip("ban_video_button"):
+                add_text("Add the video to the banned list")
+            with tooltip("unban_video_button"):
+                add_text("Remove the selected video from the banned list")
 
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("BannedIDsWindow", show=False))
@@ -1308,12 +1425,19 @@ def build_gui() -> None:
 
             # Add new whitelisted user
             add_input_text(label="Add User ID", tag="whitelist_user_input", width=250)
-            add_button(label="Whitelist User", callback=lambda: whitelist_user_callback())
+            add_button(label="Whitelist User", callback=lambda: whitelist_user_callback(), tag="whitelist_user_button")
 
             add_spacer(height=10)
 
             # Remove selected user
-            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_user_callback())
+            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_user_callback(), tag="unwhitelist_user_button")
+            
+            with tooltip("whitelist_user_input"):
+                add_text("Enter the YouTube user ID to whitelist")
+            with tooltip("whitelist_user_button"):
+                add_text("Add the user to the whitelist")
+            with tooltip("unwhitelist_user_button"):
+                add_text("Remove the selected user from the whitelist")
 
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("WhitelistedUsersWindow", show=False))
@@ -1333,22 +1457,22 @@ def build_gui() -> None:
 
             # Add new whitelisted video
             add_input_text(label="Add Video ID", tag="whitelist_id_input", width=250)
-            add_button(label="Whitelist Video", callback=lambda: whitelist_id_callback())
+            add_button(label="Whitelist Video", callback=lambda: whitelist_id_callback(), tag="whitelist_video_button")
 
             add_spacer(height=10)
 
             # Remove selected video
-            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_id_callback())
+            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_id_callback(), tag="unwhitelist_video_button")
+            
+            with tooltip("whitelist_id_input"):
+                add_text("Enter the YouTube video ID to whitelist")
+            with tooltip("whitelist_video_button"):
+                add_text("Add the video to the whitelist")
+            with tooltip("unwhitelist_video_button"):
+                add_text("Remove the selected video from the whitelist")
 
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
-
-        # =============================================================================
-        # VERSION DISPLAY
-        # =============================================================================
-        
-        add_text(f"LYTE Version: {CURRENT_VERSION}", color=(100, 200, 100))
-        add_spacer(height=5)
     
     # =============================================================================
     # GUI FINALIZATION
@@ -1361,7 +1485,7 @@ def build_gui() -> None:
     setup_dearpygui()
     show_viewport()
     set_exit_callback(on_close_attempt)
-    configure_viewport(0, resizable=False)
+    configure_viewport(0, resizable=True, min_width=700, min_height=380)
     start_dearpygui()
     destroy_context()
 
@@ -1443,11 +1567,6 @@ def show_config_menu(invalid_id: bool = False) -> None:
         
         add_spacer(height=10)
         add_button(label="Save and Start", callback=save_and_start_callback)
-        
-        add_spacer(height=20)
-
-        # Quit Button
-        add_button(label="Quit", callback=lambda: quit_program(), width=100)
 
         with tooltip("id_input"):
             add_text("The ID of your livestream (The 11 characters after 'watch?v=' in the URL)")
@@ -1481,7 +1600,7 @@ def show_config_menu(invalid_id: bool = False) -> None:
         
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='Configure LYTE', width=700, height=400)
+    create_viewport(title='Configure LYTE', width=700, height=420)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
