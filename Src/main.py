@@ -74,7 +74,7 @@ converter = forex_python.converter.CurrencyRates()
 # =============================================================================
 
 # Application version
-CURRENT_VERSION = "1.6.0"
+CURRENT_VERSION = "1.7.1"
 
 # Application paths
 APP_FOLDER = get_app_folder()
