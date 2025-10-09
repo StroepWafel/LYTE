@@ -4,7 +4,7 @@
 # =============================================================================
 
 # Application version
-CURRENT_VERSION = "1.6.1"
+CURRENT_VERSION = "1.7.2"
 
 # Standard Library Imports
 import json
