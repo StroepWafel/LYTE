@@ -5,7 +5,6 @@
 # Standard Library Imports
 import re
 import time
-import logging
 from typing import Dict, Optional
 
 # Third-Party Imports
@@ -13,36 +12,6 @@ import requests  # HTTP requests for faster fetching
 import yt_dlp  # YouTube video/audio extraction (still needed for audio URLs)
 
 # =============================================================================
-
-# =============================================================================
-# yt-dlp Logger Integration
-# =============================================================================
-
-class YtDlpLogger:
-    """Forward yt-dlp logs into the application's logging system.
-
-    Methods match yt-dlp's expected interface: debug, warning, error.
-    We forward debug as INFO so it appears in the GUI and log files
-    with the current application logging level.
-    """
-
-    def debug(self, msg):
-        try:
-            logging.info(f"[yt-dlp] {msg}")
-        except Exception:
-            pass
-
-    def warning(self, msg):
-        try:
-            logging.warning(f"[yt-dlp] {msg}")
-        except Exception:
-            pass
-
-    def error(self, msg):
-        try:
-            logging.error(f"[yt-dlp] {msg}")
-        except Exception:
-            pass
 
 # Cache for video titles and channel names to avoid repeated requests
 _video_title_cache: Dict[str, str] = {}
@@ -103,15 +72,11 @@ def get_video_title_fast(video_id: str) -> str:
         return title
         
     except Exception as e:
-        logging.error(f"Error fetching video title via oEmbed: {e}")
+        print(f"Error fetching video title via oEmbed: {e}")
         # Fallback to yt_dlp if oEmbed fails
         try:
             url = f"https://www.youtube.com/watch?v={video_id}"
-            ydl_opts = {
-                'quiet': False,
-                'extract_flat': True,
-                'logger': YtDlpLogger()
-            }
+            ydl_opts = {'quiet': True, 'extract_flat': True}
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Unknown Video')
@@ -169,17 +134,12 @@ def get_channel_name_fast(channel_id: str) -> str:
             return channel_name
             
     except Exception as e:
-        logging.error(f"Error fetching channel name via web scraping: {e}")
+        print(f"Error fetching channel name via web scraping: {e}")
     
     # Fallback to yt_dlp if web scraping fails
     try:
         url = f"https://www.youtube.com/channel/{channel_id}"
-        ydl_opts = {
-            "quiet": False,
-            "no_warnings": False,
-            "skip_download": True,
-            "logger": YtDlpLogger()
-        }
+        ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             channel_name = info.get("uploader", "Unknown Channel")
@@ -206,11 +166,7 @@ def get_video_title(youtube_url: str) -> str:
         return get_video_title_fast(video_id)
     
     # Fallback to yt_dlp for non-standard URLs
-    ydl_opts = {
-        'quiet': False,
-        'extract_flat': True,
-        'logger': YtDlpLogger()
-    }
+    ydl_opts = {'quiet': True, 'extract_flat': True}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=False)
         return info['title']
@@ -237,11 +193,7 @@ def get_direct_url(youtube_url: str) -> str:
     Returns:
         str: Direct audio stream URL for VLC playback
     """
-    ydl_opts = {
-        'format': 'bestaudio',
-        'quiet': False,
-        'logger': YtDlpLogger()
-    }
+    ydl_opts = {'format': 'bestaudio'}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=False)
         return info['url']
