@@ -3,6 +3,9 @@
 # A bot that allows YouTube live stream viewers to queue music via chat commands
 # =============================================================================
 
+# Application version
+CURRENT_VERSION = "1.6.1"
+
 # Standard Library Imports
 import json
 import logging
@@ -60,6 +63,9 @@ from helpers.update_helpers import (
     download_installer_worker,
     check_for_updates
 )
+from helpers.version_helpers import (
+    fetch_latest_release_details,
+)
 
 # =============================================================================
 # APPLICATION INITIALIZATION & GLOBAL CONSTANTS
@@ -72,9 +78,6 @@ converter = forex_python.converter.CurrencyRates()
 # =============================================================================
 # GLOBAL CONSTANTS & PATHS
 # =============================================================================
-
-# Application version
-CURRENT_VERSION = "1.7.1"
 
 # Application paths
 APP_FOLDER = get_app_folder()
@@ -130,6 +133,11 @@ BANNED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
 BANNED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
 WHITELISTED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
 WHITELISTED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
+
+# Update detection state
+UPDATE_AVAILABLE: bool = False
+LATEST_RELEASE_DETAILS: dict = {}
+LATEST_VERSION: str = ""
 
 
 # =============================================================================
@@ -278,7 +286,24 @@ def run_installer_wrapper() -> None:
 
 def check_for_updates_wrapper() -> None:
     """Check for updates with current configuration."""
-    check_for_updates(CURRENT_VERSION, TOAST_NOTIFICATIONS)
+    global UPDATE_AVAILABLE, LATEST_RELEASE_DETAILS, LATEST_VERSION
+    latest_version = check_for_updates(CURRENT_VERSION, TOAST_NOTIFICATIONS)
+    if latest_version:
+        UPDATE_AVAILABLE = True
+        LATEST_VERSION = latest_version
+        try:
+            LATEST_RELEASE_DETAILS = fetch_latest_release_details() or {}
+        except Exception:
+            LATEST_RELEASE_DETAILS = {}
+
+        # If the GUI exists, surface UI immediately
+        try:
+            if does_item_exist("MainWindow"):
+                show_download_ui(latest_version)
+            if does_item_exist("update_details_menu"):
+                configure_item("update_details_menu", enabled=True)
+        except Exception:
+            pass
 
 
 # =============================================================================
@@ -651,24 +676,50 @@ def show_download_ui(latest_version: str) -> None:
             add_text(f"Update Available: v{latest_version} (Current: v{CURRENT_VERSION})", 
                     color=(255, 200, 100), tag="update_notification", parent="MainWindow")
         
-        # Add download button
-        if not does_item_exist("download_button"):
-            add_button(label="Download Installer", callback=download_installer, 
-                      width=150, tag="download_button", parent="MainWindow")
-            with tooltip("download_button"):
-                add_text("Download the latest installer from GitHub")
-        
         # Add download status text
         if not does_item_exist("download_status"):
             add_text("", tag="download_status", parent="MainWindow")
         
-        # Add download progress bar
-        if not does_item_exist("download_progress"):
-            add_progress_bar(tag="download_progress", parent="MainWindow", 
-                           default_value=0, width=300)
+        # Note: Progress bar moved to Update Details window
             
     except Exception as e:
         logging.error(f"Error showing download UI: {e}")
+
+
+def ignore_update_action() -> None:
+    """Ignore the current update and hide related UI."""
+    global UPDATE_AVAILABLE, LATEST_VERSION
+    try:
+        UPDATE_AVAILABLE = False
+        LATEST_VERSION = ""
+        if does_item_exist("update_details_menu"):
+            configure_item("update_details_menu", enabled=False)
+        # Hide download UI elements if present
+        for tag in ("update_notification", "download_button", "download_status"):
+            if does_item_exist(tag):
+                try:
+                    configure_item(tag, show=False)
+                except Exception:
+                    pass
+        # Close details window if open
+        if does_item_exist("UpdateDetailsWindow"):
+            configure_item("UpdateDetailsWindow", show=False)
+    except Exception as e:
+        logging.error(f"Error ignoring update: {e}")
+
+
+def show_update_details_window() -> None:
+    """Populate and display the Update Details window."""
+    try:
+        name = LATEST_RELEASE_DETAILS.get("name", "Latest Release")
+        version = LATEST_RELEASE_DETAILS.get("version", LATEST_VERSION or "")
+        body = LATEST_RELEASE_DETAILS.get("body", "")
+        set_value("update_release_title", f"Release: {name}")
+        set_value("update_release_version", f"Version: v{version}" if version else "")
+        set_value("update_release_body", body)
+        configure_item("UpdateDetailsWindow", show=True)
+    except Exception as e:
+        logging.error(f"Error showing update details window: {e}")
 
 
 # =============================================================================
@@ -1160,12 +1211,15 @@ def build_gui() -> None:
                 add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
                 add_separator()
                 add_menu_item(label="Check for Updates", callback=check_for_updates_wrapper, tag="check_updates_menu")
+                add_menu_item(label="View Update Details...", callback=lambda: show_update_details_window(), tag="update_details_menu", enabled=False)
                 add_menu_item(label="Open GitHub Issues", callback=lambda: open_url("https://github.com/StroepWafel/LYTE/issues"), tag="github_issues_menu")
                 
                 with tooltip("version_menu"):
                     add_text("Current version of LYTE")
                 with tooltip("check_updates_menu"):
                     add_text("Check if a newer version is available")
+                with tooltip("update_details_menu"):
+                    add_text("View the latest release notes and actions")
                 with tooltip("github_issues_menu"):
                     add_text("Open the GitHub issues page in your browser")
                     
@@ -1377,6 +1431,33 @@ def build_gui() -> None:
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("BannedUsersWindow", show=False))
 
+
+        # =============================================================================
+        # UPDATE DETAILS WINDOW
+        # =============================================================================
+        with window(label="Update Details", tag="UpdateDetailsWindow", show=False, width=600, height=550):
+            add_text("Update Details")
+            add_separator()
+            add_text("", tag="update_release_title")
+            add_text("", tag="update_release_version")
+            add_spacer(height=10)
+            add_text("Changelog:")
+            add_input_text(label="", tag="update_release_body", multiline=True, readonly=True, width=560, height=330)
+            add_spacer(height=10)
+            with group(horizontal=True):
+                add_button(label="Open Release Page", tag="open_release_button",
+                           callback=lambda: open_url(LATEST_RELEASE_DETAILS.get("html_url", "https://github.com/StroepWafel/LYTE/releases/latest")))
+                add_button(label="Download Installer", tag="update_download_button", callback=download_installer)
+                add_button(label="Run Installer", tag="update_run_button", callback=run_installer_wrapper)
+                add_button(label="Ignore This Update", tag="ignore_update_button", callback=lambda: ignore_update_action())
+            with tooltip("open_release_button"):
+                add_text("Open the release page in your browser")
+            with tooltip("update_download_button"):
+                add_text("Download the latest installer")
+            with tooltip("update_run_button"):
+                add_text("Run the downloaded installer")
+            with tooltip("ignore_update_button"):
+                add_text("Hide this update notification")
 
         # =============================================================================
         # BANNED VIDEOS MANAGEMENT WINDOW
@@ -1685,6 +1766,21 @@ def update_now_playing_thread() -> None:
         time.sleep(1)
 
 
+def enable_update_menu_thread() -> None:
+    """Enable the update details menu and show download UI when an update is detected."""
+    while not should_exit:
+        try:
+            if UPDATE_AVAILABLE:
+                if does_item_exist("update_details_menu"):
+                    configure_item("update_details_menu", enabled=True)
+                if LATEST_VERSION and does_item_exist("MainWindow"):
+                    # Ensure download UI is visible
+                    show_download_ui(LATEST_VERSION)
+            time.sleep(1)
+        except Exception:
+            time.sleep(2)
+
+
 # =============================================================================
 # APPLICATION STARTUP
 # =============================================================================
@@ -1705,6 +1801,7 @@ load_config()
 
 # Check for updates in background
 threading.Thread(target=check_for_updates_wrapper, daemon=True).start()
+threading.Thread(target=enable_update_menu_thread, daemon=True).start()
 
 # Start all background threads
 threading.Thread(target=build_gui, daemon=True).start()

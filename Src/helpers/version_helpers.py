@@ -73,3 +73,32 @@ def fetch_latest_version() -> str:
     except Exception as e:
         logging.warning(f"Failed to fetch latest version: {e}")
         return ""
+
+def fetch_latest_release_details() -> dict:
+    """
+    Fetch the latest release details from GitHub API.
+    
+    Returns:
+        dict: Details including 'version', 'name', 'body', 'html_url'. Empty dict if failed.
+    """
+    try:
+        url = "https://api.github.com/repos/StroepWafel/LYTE/releases/latest"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        tag = data.get("tag_name", "")
+        if tag.startswith("v"):
+            tag = tag[1:]
+
+        details = {
+            "version": tag,
+            "name": data.get("name", ""),
+            "body": data.get("body", ""),
+            "html_url": data.get("html_url", ""),
+        }
+        logging.info(f"Fetched latest release details: {details.get('name', '')}")
+        return details
+    except Exception as e:
+        logging.warning(f"Failed to fetch latest release details: {e}")
+        return {}

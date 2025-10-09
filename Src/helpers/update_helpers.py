@@ -87,7 +87,7 @@ def check_for_updates(current_version: str, toast_notifications: bool) -> str:
             
         if compare_versions(current_version, latest_version) < 0:
             logging.info(f"Update available! Current: {current_version}, Latest: {latest_version}")
-            logging.info("Visit https://github.com/StroepWafel/LYTE/releases/latest to download the update")
+            logging.info("To view changelog and available options, navigate to 'Help -> View update Details...'")
             
             # Show desktop notification if enabled
             if toast_notifications:
