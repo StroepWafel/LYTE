@@ -1,10 +1,12 @@
-# =============================================================================
+# ==============================================================================
 # LYTE - YouTube Live Music Queue Bot
 # A bot that allows YouTube live stream viewers to queue music via chat commands
-# =============================================================================
+# ==============================================================================
 
+# ==============================================================================
 # Application version
-CURRENT_VERSION = "1.7.2"
+CURRENT_VERSION = "1.8.0"
+# ==============================================================================
 
 # Standard Library Imports
 import json
@@ -159,7 +161,8 @@ default_config = {
     "MINIMUM_SUPERCHAT": 3,                   # Minimum superchat value in USD
     "ENFORCE_ID_WHITELIST": "False",          # Only allow whitelisted video IDs
     "ENFORCE_USER_WHITELIST": "False",        # Only allow whitelisted users
-    "AUTOREMOVE_SONGS": "True"                # Auto-remove finished songs from queue
+    "AUTOREMOVE_SONGS": "True",               # Auto-remove finished songs from queue
+    "AUTOBAN_USERS": "False"                  # Auto-ban users who request banned videos
 }
 
 # =============================================================================
@@ -207,9 +210,12 @@ MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
 ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
 ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
 AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
+AUTOBAN_USERS = config.get('AUTOBAN_USERS', "False").lower() == "true"
+
 
 # User rate limiting - tracks last command time per user
 user_last_command = defaultdict(lambda: 0)
+user_request_strikes = defaultdict(lambda: 0)
 config_success = False
 # =============================================================================
 # VLC MEDIA PLAYER SETUP
@@ -347,6 +353,7 @@ def load_config() -> None:
     global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
     global BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS
     global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
+    global AUTOBAN_USERS
 
     # Load all configuration files
     with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
@@ -370,6 +377,7 @@ def load_config() -> None:
     ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
     ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
     AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
+    AUTOBAN_USERS = config.get('AUTOBAN_USERS', "False").lower() == "true"
 
 def quit_program() -> None:
     """
@@ -486,7 +494,8 @@ def on_volume_change(sender, app_data, user_data) -> None:
         "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
         "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
+        "AUTOBAN_USERS": str(AUTOBAN_USERS)
     }
 
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -592,7 +601,15 @@ def on_chat_message(chat_message) -> None:
 
             # Check if video is banned
             if any(video_id == x["id"] for x in BANNED_IDS):
+                
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is banned)")
+
+                if AUTOBAN_USERS:
+                    BANNED_USERS.append({"id": channelid, "name": username})
+                    save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
+                    refresh_banned_users_list()
+                    logging.info(f"Auto-banned user {username} ({channelid}) for requesting banned video")
+
                 return
 
             # Check if user is banned
@@ -1087,7 +1104,8 @@ def toggle_theme(sender, app_data, user_data) -> None:
         "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
         "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
+        "AUTOBAN_USERS": str(AUTOBAN_USERS)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -1118,7 +1136,8 @@ def set_theme(dark_mode: bool) -> None:
         "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
         "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
         "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
+        "AUTOBAN_USERS": str(AUTOBAN_USERS)
     }
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(updated_config, f, indent=4)
@@ -1148,6 +1167,7 @@ def build_gui() -> None:
         global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
         global ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
         global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
+        global AUTOBAN_USERS
         
         # Update global variables from GUI inputs
         RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
@@ -1161,6 +1181,7 @@ def build_gui() -> None:
         ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
         ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
         AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
+        AUTOBAN_USERS = get_value("autoban_users_checkbox")
 
         # Save updated configuration to file
         updated_config = {
@@ -1177,7 +1198,8 @@ def build_gui() -> None:
             "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
             "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
             "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
+            "AUTOBAN_USERS": str(AUTOBAN_USERS)
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(updated_config, f, indent=4)
@@ -1324,6 +1346,7 @@ def build_gui() -> None:
             # Whitelist enforcement
             add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
             add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+            add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
             
             # Queue management
             add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
@@ -1359,6 +1382,8 @@ def build_gui() -> None:
                 add_text("Whether or not to enforce the song ID Whitelist")
             with tooltip("autoremove_songs_checkbox"):
                 add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+            with tooltip("autoban_users_checkbox"):
+                add_text("Whether or not to automatically ban users who try to request banned songs")
 
         # =============================================================================
         # CONSOLE OUTPUT
@@ -1584,6 +1609,7 @@ def show_config_menu(invalid_id: bool = False) -> None:
         global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
         global DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT
         global MINIMUM_SUPERCHAT, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST, AUTOREMOVE_SONGS
+        global AUTOBAN_USERS
 
         # Update in-memory config from GUI values
         YOUTUBE_VIDEO_ID = get_value("id_input")
@@ -1598,6 +1624,8 @@ def show_config_menu(invalid_id: bool = False) -> None:
         ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
         ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
         AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
+        REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
+        AUTOBAN_USERS = get_value("autoban_users_checkbox")
 
         # Save config to file
         updated_config = {
@@ -1614,7 +1642,8 @@ def show_config_menu(invalid_id: bool = False) -> None:
             "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
             "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
             "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS)
+            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
+            "AUTOBAN_USERS": str(AUTOBAN_USERS)
         }
 
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -1642,12 +1671,15 @@ def show_config_menu(invalid_id: bool = False) -> None:
         add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
         add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
         add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
+        add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
 
 
         add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
         
         add_spacer(height=10)
-        add_button(label="Save and Start", callback=save_and_start_callback)
+        add_button(label="Save and Start", callback=save_and_start_callback)        
+        add_spacer(height=10)
+        add_button(label="Quit", callback=quit_program)
 
         with tooltip("id_input"):
             add_text("The ID of your livestream (The 11 characters after 'watch?v=' in the URL)")
@@ -1677,11 +1709,13 @@ def show_config_menu(invalid_id: bool = False) -> None:
             add_text("Whether or not to enforce the song ID Whitelist")
         with tooltip("autoremove_songs_checkbox"):
             add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+        with tooltip("autoban_users_checkbox"):
+            add_text("Whether or not to automatically ban users who try to request banned songs")
             
         
     create_dark_theme()
     create_light_theme()
-    create_viewport(title='Configure LYTE', width=700, height=420)
+    create_viewport(title='Configure LYTE', width=750, height=480)
     apply_theme("dark_theme" if DARK_MODE else "light_theme")
     setup_dearpygui()
     show_viewport()
