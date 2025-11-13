@@ -658,6 +658,11 @@ def on_chat_message(chat_message) -> None:
                 logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
+
+            if not is_on_youtube_music(video_id):
+                logging.warning(f"user {username} attempted to queue a song that is not available on YouTube Music! (video ID: {video_id})")
+                return
+
             # All checks passed - queue the song
             queue_song(video_id, username, channelid)
             update_now_playing()
@@ -690,6 +695,9 @@ def update_now_playing() -> None:
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
+
+def is_on_youtube_music(video_id: str) -> bool:
+    return True  # Will add once i find out a way to check properly, I can't find any reliable method as of now
 
 def is_youtube_live(video_id):
     url = f"https://www.youtube.com/watch?v={video_id}"
