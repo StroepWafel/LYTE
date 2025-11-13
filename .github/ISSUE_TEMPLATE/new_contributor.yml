@@ -1,0 +1,88 @@
+name: 🙋 New Contributor - Need Help Getting Started
+description: Perfect for first-time contributors who need guidance
+labels: ["help wanted", "documentation"]
+title: "[NEW CONTRIBUTOR] "
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Hi there! 👋
+        Welcome to LYTE! We're excited to have you join our community.
+
+  - type: checkboxes
+    attributes:
+      label: Tell us about yourself (check all that apply)
+      options:
+        - label: "This is my first time contributing to open source"
+          required: false
+        - label: "I'm new to python"
+          required: false
+        - label: "I'm new to JSON"
+          required: false
+        - label: "I have some coding experience but new to this project"
+          required: false
+          
+  - type: checkboxes
+    attributes:
+      label: What would you like to work on? (check all that apply)
+      options:
+        - label: "Fix a bug 🐛"
+          required: false
+        - label: "Add a new feature ✨"
+          required: false
+        - label: "Improve documentation 📚"
+          required: false
+        - label: "Create a plugin 🧩"
+          required: false        
+        - label: "Improve the UI/design 🎨"
+          required: false
+        - label: "Write tests 🧪"
+          required: false
+        - label: "Not sure - I want to help but need guidance!"
+          required: false
+
+  - type: input
+    attributes:
+      label: Errors
+      description: "Please list any encountered errors here:"
+      placeholder: "I am encountering issues with..."
+    validations:
+      required: false
+
+  - type: input
+    attributes:
+      label: Questions or Issues
+      description: "Tell us:
+                    1. What specifically would you like help with?
+                    2. Are you stuck on anything?
+                    3. Do you have any questions about the codebase?
+                    4. Is there anything in our documentation that's unclear?"
+      placeholder: "I want help with..."
+    validations:
+      required: false
+      
+  - type: input
+    attributes:
+      label: Ideas or Suggestions
+      description: "If you have any ideas for features, improvements, or just want to share your thoughts:"
+      placeholder: "It would be cool if I could help add..."
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ## What happens next?
+
+        A maintainer will respond within 24-48 hours to:
+        - Answer your questions
+        - Suggest some good issues to work on
+        - Help you with setup if needed
+        - Point you to relevant documentation
+        
+        Don't worry if you're new to this - we're here to help! Every expert was once a beginner. 🚀
+      
+      
+                    
+        
