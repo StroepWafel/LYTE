@@ -6,10 +6,11 @@ from PyInstaller.utils.hooks import collect_all
 dpg_datas, dpg_binaries, dpg_hiddenimports = collect_all('dearpygui')
 
 added_files = [
+    ('Src/themes', 'themes'),  # Bundle themes folder into the executable (includes demo_theme.json.demo)
 ]
 
 a = Analysis(
-    ['src\\main.py'],
+    ['Src\\main.py'],
     pathex=[],
     binaries=dpg_binaries,
     datas=added_files + dpg_datas,

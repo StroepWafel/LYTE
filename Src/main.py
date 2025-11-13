@@ -13,7 +13,6 @@ import json
 import logging
 import os
 import re
-import sys
 import threading
 import time
 import traceback
@@ -30,7 +29,7 @@ import requests  # HTTP requests
 from plyer import notification  # Desktop notifications
 import vlc  # Media player (python-vlc)
 from dearpygui.dearpygui import *  # GUI framework
-import forex_python.converter  # Currency conversion for superchat values
+# Currency conversion is handled by helpers.currency_helpers
 
 # Local Imports
 from helpers.moderation_helpers import (
@@ -68,14 +67,24 @@ from helpers.update_helpers import (
 from helpers.version_helpers import (
     fetch_latest_release_details,
 )
+from helpers.theme_helpers import (
+    init_theme_system,
+    load_all_themes,
+    create_default_theme_files,
+    apply_theme,
+    get_theme_dropdown_items,
+    get_theme_name_from_display,
+    get_available_themes,
+    get_current_theme,
+    set_current_theme,
+)
 
 # =============================================================================
 # APPLICATION INITIALIZATION & GLOBAL CONSTANTS
 # =============================================================================
 
 
-# Initialize currency converter for superchat value conversion
-converter = forex_python.converter.CurrencyRates()
+# Currency conversion is handled by helpers.currency_helpers.convert_to_usd
 
 # =============================================================================
 # GLOBAL CONSTANTS & PATHS
@@ -92,6 +101,10 @@ BANNED_IDS_PATH = os.path.join(APP_FOLDER, 'banned_IDs.json')
 BANNED_USERS_PATH = os.path.join(APP_FOLDER, 'banned_users.json')
 WHITELISTED_IDS_PATH = os.path.join(APP_FOLDER, 'whitelisted_IDs.json')
 WHITELISTED_USERS_PATH = os.path.join(APP_FOLDER, 'whitelisted_users.json')
+
+# Themes directory
+THEMES_FOLDER = os.path.join(APP_FOLDER, 'themes')
+init_theme_system(THEMES_FOLDER)
 
 # =============================================================================
 # LOGGING SETUP
@@ -118,10 +131,7 @@ logging.getLogger('yt_dlp').setLevel(logging.ERROR)
 # =============================================================================
 
 # GUI state variables
-is_user_dragging_slider = False
-last_slider_value = 0.0
 last_user_seek_time = 0
-last_gui_update_time = 0
 
 # Application control
 should_exit = False
@@ -154,7 +164,7 @@ default_config = {
     "PREFIX": "!",                            # Command prefix for chat messages
     "QUEUE_COMMAND": "queue",                 # Command name for queuing songs
     "VOLUME": 50,                             # Default volume level (0-100)
-    "DARK_MODE": "True",                      # Enable dark theme
+    "THEME": "dark_theme",                    # Theme name
     "ALLOW_URLS": "False",                    # Allow full YouTube URLs in requests
     "REQUIRE_MEMBERSHIP": "False",            # Require channel membership to request
     "REQUIRE_SUPERCHAT": "False",             # Require superchat to request
@@ -202,7 +212,13 @@ TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true
 PREFIX = config.get('PREFIX', "!")
 QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
 VOLUME = config.get('VOLUME', 25)
-DARK_MODE = config.get('DARK_MODE', "True").lower() == "true"
+# Handle migration from DARK_MODE to THEME
+raw_theme = config.get("THEME") if "THEME" in config else None
+if raw_theme is None and "DARK_MODE" in config:
+    raw_theme = "dark_theme" if config.get("DARK_MODE", "True").lower() == "true" else "light_theme"
+if not isinstance(raw_theme, str) or not raw_theme:
+    raw_theme = "dark_theme"
+set_current_theme(raw_theme)
 ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
 REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
 REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
@@ -215,8 +231,6 @@ AUTOBAN_USERS = config.get('AUTOBAN_USERS', "False").lower() == "true"
 
 # User rate limiting - tracks last command time per user
 user_last_command = defaultdict(lambda: 0)
-user_request_strikes = defaultdict(lambda: 0)
-config_success = False
 # =============================================================================
 # VLC MEDIA PLAYER SETUP
 # =============================================================================
@@ -280,6 +294,10 @@ def load_whitelisted_ids_wrapper() -> None:
     """Load whitelisted video IDs list from file and update global variable."""
     global WHITELISTED_IDS
     WHITELISTED_IDS = load_whitelisted_ids(WHITELISTED_IDS_PATH)
+
+def load_settings_wrapper() -> None:
+    """Load settings from config file and update global variables."""
+    load_config()
 
 def download_installer() -> None:
     """Start downloading the latest installer from GitHub in a background thread."""
@@ -491,28 +509,7 @@ def on_volume_change(sender, app_data, user_data) -> None:
     global VOLUME
     VOLUME = int(app_data)  # VLC expects volume 0–100
     player.get_media_player().audio_set_volume(VOLUME)
-
-    # Save volume setting to config file
-    updated_config = {
-        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
-        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
-        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
-        "PREFIX": PREFIX,
-        "QUEUE_COMMAND": QUEUE_COMMAND,
-        "VOLUME": VOLUME,
-        "DARK_MODE": str(DARK_MODE),
-        "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
-        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
-        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
-        "AUTOBAN_USERS": str(AUTOBAN_USERS)
-    }
-
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(updated_config, f, indent=4)
+    save_config_to_file()
 
 # =============================================================================
 # NOTIFICATION FUNCTIONS
@@ -696,6 +693,40 @@ def update_now_playing() -> None:
 # UTILITY FUNCTIONS
 # =============================================================================
 
+def save_config_to_file() -> None:
+    """Save current configuration to config file."""
+    updated_config = {
+        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
+        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
+        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
+        "PREFIX": PREFIX,
+        "QUEUE_COMMAND": QUEUE_COMMAND,
+        "VOLUME": VOLUME,
+        "THEME": get_current_theme(),
+        "ALLOW_URLS": str(ALLOW_URLS),
+        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
+        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
+        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
+        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
+        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
+        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
+        "AUTOBAN_USERS": str(AUTOBAN_USERS)
+    }
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(updated_config, f, indent=4)
+
+def extract_id_from_listbox_item(item: str) -> str:
+    """
+    Extract ID from listbox item in "Name (ID)" format.
+    
+    Args:
+        item: Listbox item string in format "Name (ID)"
+        
+    Returns:
+        str: Extracted ID
+    """
+    return item.split("(")[-1].strip(")")
+
 def is_on_youtube_music(video_id: str) -> bool:
     return True  # Will add once i find out a way to check properly, I can't find any reliable method as of now
 
@@ -813,6 +844,52 @@ def refresh_whitelisted_ids_list() -> None:
 # BAN/UNBAN CALLBACK FUNCTIONS
 # =============================================================================
 
+def _add_item_with_async_name_fetch(
+    item_id: str,
+    item_list: list,
+    input_tag: str,
+    save_func,
+    refresh_func,
+    fetch_name_func,
+    item_type: str
+) -> None:
+    """
+    Helper function to add an item to a list with placeholder name,
+    then fetch the real name in a background thread.
+    
+    Args:
+        item_id: ID of the item to add
+        item_list: List to add the item to (will be modified)
+        input_tag: GUI input tag to clear after adding
+        save_func: Function to save the list to file
+        refresh_func: Function to refresh the GUI list
+        fetch_name_func: Function to fetch the real name (takes item_id)
+        item_type: Type of item for error messages (e.g., "user", "video")
+    """
+    if item_id and all(u["id"] != item_id for u in item_list):
+        # Add immediately with placeholder
+        item_list.append({"id": item_id, "name": "Loading..."})
+        save_func(item_list)
+        refresh_func()
+        set_value(input_tag, "")  # clear input
+
+        # Fetch real name in background
+        def fetch_and_update():
+            try:
+                real_name = fetch_name_func(item_id)
+                # Update the entry in the list
+                for u in item_list:
+                    if u["id"] == item_id:
+                        u["name"] = real_name
+                        break
+                save_func(item_list)
+                # Update the listbox in the GUI thread
+                refresh_func()
+            except Exception as e:
+                logging.error(f"Error fetching {item_type} name for {item_id}: {e}")
+
+        threading.Thread(target=fetch_and_update, daemon=True).start()
+
 def ban_user_callback() -> None:
     """
     Handle banning a user from the GUI.
@@ -822,29 +899,15 @@ def ban_user_callback() -> None:
     """
     global BANNED_USERS
     user_to_ban = get_value("ban_user_input").strip()
-    if user_to_ban and all(u["id"] != user_to_ban for u in BANNED_USERS):
-        # Add immediately with placeholder
-        BANNED_USERS.append({"id": user_to_ban, "name": "Loading..."})
-        save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
-        refresh_banned_users_list()
-        set_value("ban_user_input", "")  # clear input
-
-        # Fetch real channel name in background
-        def fetch_and_update():
-            try:
-                real_name = fetch_channel_name(user_to_ban)
-                # Update the entry in BANNED_USERS
-                for u in BANNED_USERS:
-                    if u["id"] == user_to_ban:
-                        u["name"] = real_name
-                        break
-                save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
-                # Update the listbox in the GUI thread
-                refresh_banned_users_list()
-            except Exception as e:
-                logging.error(f"Error fetching channel name for {user_to_ban}: {e}")
-
-        threading.Thread(target=fetch_and_update, daemon=True).start()
+    _add_item_with_async_name_fetch(
+        user_to_ban,
+        BANNED_USERS,
+        "ban_user_input",
+        lambda lst: save_banned_users(lst, BANNED_USERS_PATH),
+        refresh_banned_users_list,
+        fetch_channel_name,
+        "channel"
+    )
 
 def ban_id_callback() -> None:
     """
@@ -855,29 +918,15 @@ def ban_id_callback() -> None:
     """
     global BANNED_IDS
     id_to_ban = get_value("ban_id_input").strip()
-    if id_to_ban and all(u["id"] != id_to_ban for u in BANNED_IDS):
-        # Add immediately with placeholder
-        BANNED_IDS.append({"id": id_to_ban, "name": "Loading..."})
-        save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
-        refresh_banned_ids_list()
-        set_value("ban_id_input", "")  # clear input
-
-        # Fetch real video name in background
-        def fetch_and_update():
-            try:
-                real_name = get_video_name_fromID(id_to_ban)
-                # Update the entry in BANNED_IDS
-                for u in BANNED_IDS:
-                    if u["id"] == id_to_ban:
-                        u["name"] = real_name
-                        break
-                save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
-                # Update the listbox in the GUI thread
-                refresh_banned_ids_list()
-            except Exception as e:
-                logging.error(f"Error fetching video name for {id_to_ban}: {e}")
-
-        threading.Thread(target=fetch_and_update, daemon=True).start()
+    _add_item_with_async_name_fetch(
+        id_to_ban,
+        BANNED_IDS,
+        "ban_id_input",
+        lambda lst: save_banned_ids(lst, BANNED_IDS_PATH),
+        refresh_banned_ids_list,
+        get_video_name_fromID,
+        "video"
+    )
 
 def whitelist_user_callback() -> None:
     """
@@ -888,29 +937,15 @@ def whitelist_user_callback() -> None:
     """
     global WHITELISTED_USERS
     user_to_whitelist = get_value("whitelist_user_input").strip()
-    if user_to_whitelist and all(u["id"] != user_to_whitelist for u in WHITELISTED_USERS):
-        # Add immediately with placeholder
-        WHITELISTED_USERS.append({"id": user_to_whitelist, "name": "Loading..."})
-        save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
-        refresh_whitelisted_users_list()
-        set_value("whitelist_user_input", "")  # clear input
-
-        # Fetch real channel name in background
-        def fetch_and_update():
-            try:
-                real_name = fetch_channel_name(user_to_whitelist)
-                # Update the entry in WHITELISTED_USERS
-                for u in WHITELISTED_USERS:
-                    if u["id"] == user_to_whitelist:
-                        u["name"] = real_name
-                        break
-                save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
-                # Update the listbox in the GUI thread
-                refresh_whitelisted_users_list()
-            except Exception as e:
-                logging.error(f"Error fetching channel name for {user_to_whitelist}: {e}")
-
-        threading.Thread(target=fetch_and_update, daemon=True).start()
+    _add_item_with_async_name_fetch(
+        user_to_whitelist,
+        WHITELISTED_USERS,
+        "whitelist_user_input",
+        lambda lst: save_whitelisted_users(lst, WHITELISTED_USERS_PATH),
+        refresh_whitelisted_users_list,
+        fetch_channel_name,
+        "channel"
+    )
 
 def whitelist_id_callback() -> None:
     """
@@ -921,37 +956,22 @@ def whitelist_id_callback() -> None:
     """
     global WHITELISTED_IDS
     id_to_whitelist = get_value("whitelist_id_input").strip()
-    if id_to_whitelist and all(u["id"] != id_to_whitelist for u in WHITELISTED_IDS):
-        # Add immediately with placeholder
-        WHITELISTED_IDS.append({"id": id_to_whitelist, "name": "Loading..."})
-        save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
-        refresh_whitelisted_ids_list()
-        set_value("whitelist_id_input", "")  # clear input
-
-        # Fetch real video name in background
-        def fetch_and_update():
-            try:
-                real_name = get_video_name_fromID(id_to_whitelist)
-                # Update the entry in WHITELISTED_IDS
-                for u in WHITELISTED_IDS:
-                    if u["id"] == id_to_whitelist:
-                        u["name"] = real_name
-                        break
-                save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
-                # Update the listbox in the GUI thread
-                refresh_whitelisted_ids_list()
-            except Exception as e:
-                logging.error(f"Error fetching video name for {id_to_whitelist}: {e}")
-
-        threading.Thread(target=fetch_and_update, daemon=True).start()
+    _add_item_with_async_name_fetch(
+        id_to_whitelist,
+        WHITELISTED_IDS,
+        "whitelist_id_input",
+        lambda lst: save_whitelisted_ids(lst, WHITELISTED_IDS_PATH),
+        refresh_whitelisted_ids_list,
+        get_video_name_fromID,
+        "video"
+    )
 
 def unban_user_callback() -> None:
     """Remove selected user from banned users list."""
     global BANNED_USERS
     selected = get_value("banned_users_list")
     if selected:
-        # Extract ID from "Name (ID)" format
-        selected_id = selected.split("(")[-1].strip(")")
+        selected_id = extract_id_from_listbox_item(selected)
         BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
         save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
         refresh_banned_users_list()
@@ -961,8 +981,7 @@ def unban_id_callback() -> None:
     global BANNED_IDS
     selected = get_value("banned_ids_list")
     if selected:
-        # Extract ID from "Name (ID)" format
-        selected_id = selected.split("(")[-1].strip(")")
+        selected_id = extract_id_from_listbox_item(selected)
         BANNED_IDS = [u for u in BANNED_IDS if u["id"] != selected_id]
         save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
         refresh_banned_ids_list()
@@ -972,8 +991,7 @@ def unwhitelist_user_callback() -> None:
     global WHITELISTED_USERS
     selected = get_value("whitelisted_users_list")
     if selected:
-        # Extract ID from "Name (ID)" format
-        selected_id = selected.split("(")[-1].strip(")")
+        selected_id = extract_id_from_listbox_item(selected)
         WHITELISTED_USERS = [u for u in WHITELISTED_USERS if u["id"] != selected_id]
         save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
         refresh_whitelisted_users_list()
@@ -983,8 +1001,7 @@ def unwhitelist_id_callback() -> None:
     global WHITELISTED_IDS
     selected = get_value("whitelisted_ids_list")
     if selected:
-        # Extract ID from "Name (ID)" format
-        selected_id = selected.split("(")[-1].strip(")")
+        selected_id = extract_id_from_listbox_item(selected)
         WHITELISTED_IDS = [u for u in WHITELISTED_IDS if u["id"] != selected_id]
         save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
         refresh_whitelisted_ids_list()
@@ -992,201 +1009,77 @@ def unwhitelist_id_callback() -> None:
 # GUI INITIALIZATION & THEMES
 # =============================================================================
 
-# Initialize DearPyGui context
-create_context()
-
 # GUI state variables
 now_playing_text = None
 song_slider_tag = "song_slider"
 ignore_slider_callback = False
 
-# Theme variables
-dark_theme = None
-light_theme = None
-
-def create_dark_theme() -> None:
-    """Create and configure the dark theme for the GUI."""
-    with theme(tag="dark_theme"):
-        with theme_component(mvAll):
-            # Modern dark theme with green accent
-            add_theme_color(mvThemeCol_WindowBg, (25, 25, 25, 255))  # Pure dark background
-            add_theme_color(mvThemeCol_FrameBg, (35, 35, 35, 255))   # Slightly lighter frame background
-            add_theme_color(mvThemeCol_Button, (60, 70, 60, 255))    # Dark green-gray button
-            add_theme_color(mvThemeCol_ButtonHovered, (80, 120, 80, 255))  # Green on hover
-            add_theme_color(mvThemeCol_ButtonActive, (100, 150, 100, 255))  # Brighter green when active
-            add_theme_color(mvThemeCol_Text, (220, 220, 220, 255))   # Crisp white text
-            add_theme_color(mvThemeCol_SliderGrab, (100, 150, 100, 255))  # Green for slider
-            add_theme_color(mvThemeCol_SliderGrabActive, (120, 180, 120, 255))  # Brighter green for active slider
-            add_theme_color(mvThemeCol_Header, (40, 40, 40, 255))    # Dark header
-            
-            # Additional modern styling
-            add_theme_color(mvThemeCol_ScrollbarBg, (35, 35, 35, 128))  # Semi-transparent scrollbar bg
-            add_theme_color(mvThemeCol_ScrollbarGrab, (60, 70, 60, 255))  # Matching scrollbar
-            add_theme_color(mvThemeCol_ScrollbarGrabHovered, (80, 120, 80, 255))
-            add_theme_color(mvThemeCol_ScrollbarGrabActive, (100, 150, 100, 255))
-            add_theme_color(mvThemeCol_CheckMark, (100, 150, 100, 255))  # Green checkmarks
-            add_theme_color(mvThemeCol_HeaderHovered, (80, 120, 80, 255))
-            add_theme_color(mvThemeCol_HeaderActive, (100, 150, 100, 255))
-            add_theme_color(mvThemeCol_Tab, (60, 70, 60, 255))
-            add_theme_color(mvThemeCol_TabHovered, (80, 120, 80, 255))
-            add_theme_color(mvThemeCol_TabActive, (100, 150, 100, 255))
-            add_theme_color(mvThemeCol_TitleBg, (25, 25, 25, 255))  # Window title background
-            add_theme_color(mvThemeCol_TitleBgActive, (40, 50, 40, 255))  # Active window title
-            add_theme_color(mvThemeCol_TitleBgCollapsed, (25, 25, 25, 128))  # Collapsed window title
-            add_theme_color(mvThemeCol_MenuBarBg, (30, 30, 30, 255))  # Menu bar background
-            
-            # Border and separator styling
-            add_theme_color(mvThemeCol_Border, (70, 90, 70, 255))
-            add_theme_color(mvThemeCol_Separator, (70, 90, 70, 255))
-            add_theme_color(mvThemeCol_PopupBg, (35, 35, 35, 240))  # Popup background with slight transparency
-            
-            # Input fields
-            add_theme_color(mvThemeCol_TextSelectedBg, (80, 120, 80, 150))  # Text selection background
-            
-            # Style variables for modern look
-            add_theme_style(mvStyleVar_FrameRounding, 8.0)  # More pronounced rounded corners
-            add_theme_style(mvStyleVar_FrameBorderSize, 0.5)  # Thinner borders for cleaner look
-            add_theme_style(mvStyleVar_WindowRounding, 12.0)  # More rounded window corners
-            add_theme_style(mvStyleVar_ScrollbarSize, 12.0)  # Slightly larger scrollbars
-            add_theme_style(mvStyleVar_ScrollbarRounding, 8.0)  # Rounded scrollbars
-            add_theme_style(mvStyleVar_TabRounding, 8.0)  # Rounded tabs
-            add_theme_style(mvStyleVar_GrabRounding, 8.0)  # Rounded grab corners
-            add_theme_style(mvStyleVar_ChildRounding, 8.0)  # Rounded child windows
-            add_theme_style(mvStyleVar_PopupRounding, 8.0)  # Rounded popup windows
-            add_theme_style(mvStyleVar_ItemSpacing, 8, 6)  # Increased spacing between items
-            add_theme_style(mvStyleVar_ItemInnerSpacing, 6, 6)  # Increased inner spacing
-
-def create_light_theme() -> None:
-    """Create and configure the light theme for the GUI."""
-    with theme(tag="light_theme"):
-        with theme_component(mvAll):
-            # Modern light theme with teal accent
-            add_theme_color(mvThemeCol_WindowBg, (248, 250, 252, 255))  # Very light cool white
-            add_theme_color(mvThemeCol_FrameBg, (235, 242, 248, 255))   # Light blue-white for frames
-            add_theme_color(mvThemeCol_Button, (200, 230, 230, 255))    # Soft teal button
-            add_theme_color(mvThemeCol_ButtonHovered, (150, 210, 210, 255))  # Medium teal on hover
-            add_theme_color(mvThemeCol_ButtonActive, (100, 190, 190, 255))   # Deeper teal when active
-            add_theme_color(mvThemeCol_Text, (40, 50, 60, 255))         # Dark slate text for contrast
-            add_theme_color(mvThemeCol_SliderGrab, (80, 180, 180, 255)) # Teal for slider
-            add_theme_color(mvThemeCol_SliderGrabActive, (60, 160, 160, 255)) # Deeper teal for active slider
-            add_theme_color(mvThemeCol_Header, (220, 240, 240, 255))    # Very light teal header
-            
-            # Additional modern styling
-            add_theme_color(mvThemeCol_ScrollbarBg, (235, 242, 248, 128))  # Semi-transparent scrollbar bg
-            add_theme_color(mvThemeCol_ScrollbarGrab, (180, 220, 220, 255))  # Matching scrollbar
-            add_theme_color(mvThemeCol_ScrollbarGrabHovered, (150, 210, 210, 255))
-            add_theme_color(mvThemeCol_ScrollbarGrabActive, (100, 190, 190, 255))
-            add_theme_color(mvThemeCol_CheckMark, (80, 180, 180, 255))  # Teal checkmarks
-            add_theme_color(mvThemeCol_HeaderHovered, (180, 220, 220, 255))
-            add_theme_color(mvThemeCol_HeaderActive, (150, 210, 210, 255))
-            add_theme_color(mvThemeCol_Tab, (200, 230, 230, 255))
-            add_theme_color(mvThemeCol_TabHovered, (150, 210, 210, 255))
-            add_theme_color(mvThemeCol_TabActive, (100, 190, 190, 255))
-            add_theme_color(mvThemeCol_TitleBg, (235, 242, 248, 255))  # Window title background
-            add_theme_color(mvThemeCol_TitleBgActive, (220, 240, 240, 255))  # Active window title
-            add_theme_color(mvThemeCol_TitleBgCollapsed, (235, 242, 248, 128))  # Collapsed window title
-            add_theme_color(mvThemeCol_MenuBarBg, (220, 240, 240, 255))  # Menu bar background
-            
-            # Border and separator styling
-            add_theme_color(mvThemeCol_Border, (180, 220, 220, 255))
-            add_theme_color(mvThemeCol_Separator, (180, 220, 220, 255))
-            add_theme_color(mvThemeCol_PopupBg, (248, 250, 252, 240))  # Popup background with slight transparency
-            
-            # Input fields
-            add_theme_color(mvThemeCol_TextSelectedBg, (150, 210, 210, 150))  # Text selection background
-            
-            # Style variables for modern look
-            add_theme_style(mvStyleVar_FrameRounding, 8.0)  # More pronounced rounded corners
-            add_theme_style(mvStyleVar_FrameBorderSize, 0.5)  # Thinner borders for cleaner look
-            add_theme_style(mvStyleVar_WindowRounding, 12.0)  # More rounded window corners
-            add_theme_style(mvStyleVar_ScrollbarSize, 12.0)  # Slightly larger scrollbars
-            add_theme_style(mvStyleVar_ScrollbarRounding, 8.0)  # Rounded scrollbars
-            add_theme_style(mvStyleVar_TabRounding, 8.0)  # Rounded tabs
-            add_theme_style(mvStyleVar_GrabRounding, 8.0)  # Rounded grab corners
-            add_theme_style(mvStyleVar_ChildRounding, 8.0)  # Rounded child windows
-            add_theme_style(mvStyleVar_PopupRounding, 8.0)  # Rounded popup windows
-            add_theme_style(mvStyleVar_ItemSpacing, 8, 6)  # Increased spacing between items
-            add_theme_style(mvStyleVar_ItemInnerSpacing, 6, 6)  # Increased inner spacing
-
-def apply_theme(theme_tag: str) -> None:
-    """
-    Apply the specified theme to the GUI.
-    
-    Args:
-        theme_tag: Theme identifier ("dark_theme" or "light_theme")
-    """
-    bind_theme(theme_tag)
-
-
 # =============================================================================
 # THEME MANAGEMENT FUNCTIONS
 # =============================================================================
 
-def toggle_theme(sender, app_data, user_data) -> None:
+def select_theme_by_name(theme_name: str) -> None:
     """
-    Toggle between dark and light themes.
+    Select a theme by its name.
+    
+    Args:
+        theme_name: Name of the theme to select
+    """
+    if theme_name is None:
+        logging.warning("select_theme_by_name called with None theme_name - this should not happen")
+        import traceback
+        logging.debug(f"Traceback: {traceback.format_exc()}")
+        return
+    
+    if not isinstance(theme_name, str) or not theme_name.strip():
+        logging.warning(f"select_theme_by_name called with invalid theme_name: {theme_name!r}")
+        return
+
+    themes = get_available_themes()
+    
+    if theme_name not in themes:
+        logging.warning(f"Theme {theme_name!r} not found. Available themes: {list(themes.keys())}")
+        return
+    
+    set_current_theme(theme_name)
+    apply_theme(theme_name)
+    
+    # Update menu checkmarks
+    update_theme_menu_checks()
+    
+    # Save theme preference to config
+    save_theme_to_config()
+
+def select_theme(sender, app_data, user_data) -> None:
+    """
+    Handle theme selection from dropdown (for combo boxes).
     
     Args:
         sender: GUI element that triggered the callback (unused)
-        app_data: Additional data (unused)
+        app_data: Selected theme display name
         user_data: Additional user data (unused)
     """
-    global DARK_MODE
-    DARK_MODE = not DARK_MODE
-    apply_theme("dark_theme" if DARK_MODE else "light_theme")
-
-    # Save theme preference to config
-    updated_config = {
-        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
-        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
-        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
-        "PREFIX": PREFIX,
-        "QUEUE_COMMAND": QUEUE_COMMAND,
-        "VOLUME": VOLUME,
-        "DARK_MODE": str(DARK_MODE),
-        "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
-        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
-        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
-        "AUTOBAN_USERS": str(AUTOBAN_USERS)
-    }
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(updated_config, f, indent=4)
-
-def set_theme(dark_mode: bool) -> None:
-    """
-    Set the theme based on the provided mode.
+    if not app_data:
+        return
     
-    Args:
-        dark_mode: True for dark theme, False for light theme
-    """
-    global DARK_MODE
-    DARK_MODE = dark_mode
-    apply_theme("dark_theme" if DARK_MODE else "light_theme")
+    theme_name = get_theme_name_from_display(app_data)
+    select_theme_by_name(theme_name)
 
-    # Save theme preference to config
-    updated_config = {
-        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
-        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
-        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
-        "PREFIX": PREFIX,
-        "QUEUE_COMMAND": QUEUE_COMMAND,
-        "VOLUME": VOLUME,
-        "DARK_MODE": str(DARK_MODE),
-        "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
-        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
-        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
-        "AUTOBAN_USERS": str(AUTOBAN_USERS)
-    }
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(updated_config, f, indent=4)
+def update_theme_menu_checks() -> None:
+    """Update checkmarks on theme menu items."""
+    themes = get_available_themes()
+    if not themes:
+        return
+    
+    current = get_current_theme()
+    for theme_name in themes.keys():
+        menu_tag = f"theme_menu_{theme_name}"
+        if does_item_exist(menu_tag):
+            configure_item(menu_tag, check=(theme_name == current))
+
+def save_theme_to_config() -> None:
+    """Save current theme to config file."""
+    save_config_to_file()
 
 def open_url(url: str) -> None:
     """Open a URL in the user's default web browser."""
@@ -1211,7 +1104,7 @@ def build_gui() -> None:
     def update_settings_from_menu() -> None:
         """Update configuration from GUI settings and save to file."""
         global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
-        global ALLOW_URLS, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
+        global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
         global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
         global AUTOBAN_USERS
         
@@ -1230,25 +1123,7 @@ def build_gui() -> None:
         AUTOBAN_USERS = get_value("autoban_users_checkbox")
 
         # Save updated configuration to file
-        updated_config = {
-            "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
-            "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
-            "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
-            "PREFIX": PREFIX,
-            "QUEUE_COMMAND": QUEUE_COMMAND,
-            "VOLUME": VOLUME,
-            "DARK_MODE": str(DARK_MODE),
-            "ALLOW_URLS": str(ALLOW_URLS),
-            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
-            "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
-            "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
-            "AUTOBAN_USERS": str(AUTOBAN_USERS)
-        }
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(updated_config, f, indent=4)
+        save_config_to_file()
 
     # =============================================================================
     # MAIN WINDOW CONSTRUCTION
@@ -1270,10 +1145,30 @@ def build_gui() -> None:
                     add_text("Exit the application")
                     
             with menu(label="View"):
-                add_menu_item(label="Toggle Dark/Light Mode", callback=toggle_theme, tag="toggle_theme_menu")
-                
-                with tooltip("toggle_theme_menu"):
-                    add_text("Switch between dark and light themes")
+                with menu(label="Theme"):
+                    # Add menu items for each theme
+                    theme_items = get_theme_dropdown_items()
+                    if theme_items:
+                        for display_name in theme_items:
+                            if not display_name:
+                                logging.warning(f"Skipping empty display name in theme menu")
+                                continue
+                            theme_name = get_theme_name_from_display(display_name)
+                            if not theme_name or theme_name is None:
+                                logging.warning(f"Skipping theme menu entry for display name {display_name!r} - got None theme name")
+                                continue
+                            is_current = (theme_name == get_current_theme())
+                            # Use a closure to capture theme_name properly, prevents closure issue where all lambdas in a loop reference the same variable
+                            def make_theme_callback(tn):
+                                def callback(sender, app_data, user_data):
+                                    logging.debug(f"Theme menu callback triggered for theme: {tn!r}")
+                                    select_theme_by_name(tn)
+                                return callback
+                            add_menu_item(label=display_name, 
+                                         callback=make_theme_callback(theme_name),
+                                         check=is_current, tag=f"theme_menu_{theme_name}")
+                    else:
+                        add_menu_item(label="No themes available", enabled=False)
                     
             with menu(label="Help"):
                 add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
@@ -1300,6 +1195,9 @@ def build_gui() -> None:
                               callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
                 add_menu_item(label="Manage Whitelisted Videos", tag="whitelist_videos_menu",
                               callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
+                add_menu_item(label="Settings", tag="settings_menu",
+                              callback=lambda: (load_config(), configure_item("SettingsWindow", show=True)))
+                
                 
                 with tooltip("banned_users_menu"):
                     add_text("Manage users who are not allowed to request songs")
@@ -1309,6 +1207,8 @@ def build_gui() -> None:
                     add_text("Manage users who are allowed to request songs when whitelist is enforced")
                 with tooltip("whitelist_videos_menu"):
                     add_text("Manage videos that are allowed to be requested when whitelist is enforced")
+                with tooltip("settings_menu"):
+                    add_text("Manage general settings")
         # =============================================================================
         # NOW PLAYING DISPLAY
         # =============================================================================
@@ -1371,67 +1271,6 @@ def build_gui() -> None:
             add_text("Current position / Total duration")
 
         # =============================================================================
-        # SETTINGS PANEL
-        # =============================================================================
-        
-        with collapsing_header(label="Settings"):
-            # Command configuration
-            add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
-            add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
-            add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
-            
-            # Notification settings
-            add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
-            
-            # Request permissions
-            add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
-            add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
-            add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
-            add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
-            
-            # Whitelist enforcement
-            add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
-            add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
-            add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
-            
-            # Queue management
-            add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
-
-            add_spacer(height=10)
-            add_button(label="Update Settings", callback=update_settings_from_menu)
-
-            # =============================================================================
-            # SETTINGS TOOLTIPS
-            # =============================================================================
-            
-            with tooltip("prefix_input"):
-                add_text("The prefix before a command, useful if you already have another chatbot")
-                add_text("Can be any number of alphanumerical characters")
-            with tooltip("queue_input"):
-                add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces")
-            with tooltip("rate_limit_input"):
-                add_text("How long a user has to wait before they can queue another song, in seconds")
-            with tooltip("toast_checkbox"):
-                add_text("Whether or not to show desktop notifications when a song is queued")
-            with tooltip("allowURLs_checkbox"):
-                add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
-            with tooltip("require_membership_checkbox"):
-                add_text("Whether or not users need to be a member of the channel to request a song")
-            with tooltip("require_superchat_checkbox"):
-                add_text("Whether or not users need to send a superchat to request a song")
-            with tooltip("minimum_superchat_input"):
-                add_text("The minimum value superchat (in USD) that a user must spend to request a song")
-                add_text("Supplementary to 'Require Superchat to request'")
-            with tooltip("enforce_user_whitelist_checkbox"):
-                add_text("Whether or not to enforce the user Whitelist")
-            with tooltip("enforce_id_whitelist_checkbox"):
-                add_text("Whether or not to enforce the song ID Whitelist")
-            with tooltip("autoremove_songs_checkbox"):
-                add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
-            with tooltip("autoban_users_checkbox"):
-                add_text("Whether or not to automatically ban users who try to request banned songs")
-
-        # =============================================================================
         # CONSOLE OUTPUT
         # =============================================================================
         
@@ -1469,6 +1308,70 @@ def build_gui() -> None:
         gui_handler.setLevel(logging.INFO)
         gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(gui_handler)
+
+        # =============================================================================
+        # SETTINGS WINDOW
+        # =============================================================================
+
+        with window(label="Settings", tag="SettingsWindow", show=False, width=750, height=410):
+            add_text("Settings")
+            add_separator()
+
+            # Command configuration
+            add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
+            add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
+            add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
+            
+            # Notification settings
+            add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+            
+            # Request permissions
+            add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
+            add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
+            add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
+            add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
+            
+            # Whitelist enforcement
+            add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
+            add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
+            add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
+            
+            # Queue management
+            add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
+
+            add_spacer(height=10)
+            add_button(label="Update Settings", callback=lambda: (update_settings_from_menu(), configure_item("SettingsWindow", show=False)))
+
+            # =============================================================================
+            # SETTINGS TOOLTIPS
+            # =============================================================================
+            
+            with tooltip("prefix_input"):
+                add_text("The prefix before a command, useful if you already have another chatbot")
+                add_text("Can be any number of alphanumerical characters")
+            with tooltip("queue_input"):
+                add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces")
+            with tooltip("rate_limit_input"):
+                add_text("How long a user has to wait before they can queue another song, in seconds")
+            with tooltip("toast_checkbox"):
+                add_text("Whether or not to show desktop notifications when a song is queued")
+            with tooltip("allowURLs_checkbox"):
+                add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
+            with tooltip("require_membership_checkbox"):
+                add_text("Whether or not users need to be a member of the channel to request a song")
+            with tooltip("require_superchat_checkbox"):
+                add_text("Whether or not users need to send a superchat to request a song")
+            with tooltip("minimum_superchat_input"):
+                add_text("The minimum value superchat (in USD) that a user must spend to request a song")
+                add_text("Supplementary to 'Require Superchat to request'")
+            with tooltip("enforce_user_whitelist_checkbox"):
+                add_text("Whether or not to enforce the user Whitelist")
+            with tooltip("enforce_id_whitelist_checkbox"):
+                add_text("Whether or not to enforce the song ID Whitelist")
+            with tooltip("autoremove_songs_checkbox"):
+                add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+            with tooltip("autoban_users_checkbox"):
+                add_text("Whether or not to automatically ban users who try to request banned songs")
 
         # =============================================================================
         # BANNED USERS MANAGEMENT WINDOW
@@ -1630,16 +1533,30 @@ def build_gui() -> None:
     # GUI FINALIZATION
     # =============================================================================
     
-    create_dark_theme()
-    create_light_theme()
-    create_viewport(title='LYTE Control Panel', width=1330, height=750)
-    apply_theme("dark_theme" if DARK_MODE else "light_theme")
-    setup_dearpygui()
-    show_viewport()
-    set_exit_callback(on_close_attempt)
-    configure_viewport(0, resizable=True, min_width=700, min_height=380)
-    start_dearpygui()
-    destroy_context()
+    try:
+        create_default_theme_files()
+        load_all_themes()
+        # Ensure current theme exists, fallback to first available or dark_theme
+        themes = get_available_themes()
+        current = get_current_theme()
+        if current not in themes:
+            if themes:
+                set_current_theme(list(themes.keys())[0])
+            else:
+                set_current_theme("dark_theme")
+        create_viewport(title='LYTE Control Panel', width=1330, height=500)
+        apply_theme(get_current_theme())
+        setup_dearpygui()
+        show_viewport()
+        set_exit_callback(on_close_attempt)
+        configure_viewport(0, resizable=True, min_width=700, min_height=380)
+        start_dearpygui()
+    except Exception as e:
+        logging.error(f"Error in build_gui: {e}")
+        logging.error(traceback.format_exc())
+        raise
+    finally:
+        destroy_context()
 
 def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
     """
@@ -1650,10 +1567,19 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
     """
     create_context()
     
+    # Load themes before creating the window so dropdown can access them
+    try:
+        create_default_theme_files()
+        load_all_themes()
+    except Exception as theme_error:
+        logging.error(f"Error loading themes: {theme_error}")
+        logging.error(traceback.format_exc())
+        # Continue anyway - we'll use default theme
+    
     def save_and_start_callback() -> None:
         """Save configuration and start the application."""
         global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
-        global DARK_MODE, ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT
+        global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT
         global MINIMUM_SUPERCHAT, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST, AUTOREMOVE_SONGS
         global AUTOBAN_USERS
 
@@ -1663,7 +1589,15 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         TOAST_NOTIFICATIONS = str(get_value("toast_checkbox")).lower() == "true"
         PREFIX = get_value("prefix_input")
         QUEUE_COMMAND = get_value("queue_input")
-        DARK_MODE = get_value("dark_mode_checkbox")
+        # Get selected theme
+        selected_theme_display = get_value("theme_dropdown_config")
+        if selected_theme_display:
+            theme_name = get_theme_name_from_display(selected_theme_display)
+            if theme_name and theme_name is not None:
+                set_current_theme(theme_name)
+            else:
+                logging.error(f"Failed to resolve theme name from display name {selected_theme_display!r}")
+        
         ALLOW_URLS = get_value("allowURLs_checkbox")
         REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
         MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
@@ -1674,28 +1608,9 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         AUTOBAN_USERS = get_value("autoban_users_checkbox")
 
         # Save config to file
-        updated_config = {
-            "YOUTUBE_VIDEO_ID": get_value("id_input"),
-            "RATE_LIMIT_SECONDS": int(get_value("rate_limit_input")),
-            "TOAST_NOTIFICATIONS": str(get_value("toast_checkbox")),
-            "PREFIX": get_value("prefix_input"),
-            "QUEUE_COMMAND": get_value("queue_input"),
-            "VOLUME": VOLUME,
-            "DARK_MODE": str(get_value("dark_mode_checkbox")),
-            "ALLOW_URLS": str(get_value("allowURLs_checkbox")),
-            "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
-            "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-            "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
-            "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-            "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-            "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
-            "AUTOBAN_USERS": str(AUTOBAN_USERS)
-        }
+        save_config_to_file()
 
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(updated_config, f, indent=4)
-
-        set_theme(DARK_MODE)
+        apply_theme(get_current_theme())
         stop_dearpygui()
 
     with window(label="Configure LYTE Settings", tag="ConfigWindow", width=0, height=0):
@@ -1723,7 +1638,17 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
 
 
-        add_checkbox(label="Enable Dark Mode", default_value=config["DARK_MODE"].lower() == "true", tag="dark_mode_checkbox")
+        # Theme selection dropdown
+        theme_items = get_theme_dropdown_items()
+        if theme_items:
+            # Get current theme display name
+            themes = get_available_themes()
+            current = get_current_theme()
+            current_display = themes.get(current, {}).get("display_name", theme_items[0] if theme_items else "")
+            add_combo(label="Theme", items=theme_items, default_value=current_display, 
+                     tag="theme_dropdown_config", width=200)
+        else:
+            add_text("No themes available", color=(255, 100, 100))
         
         add_spacer(height=10)
         add_button(label="Save and Start", callback=save_and_start_callback)        
@@ -1750,8 +1675,8 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         with tooltip("minimum_superchat_input"):
             add_text("The minimum value superchat (in USD) that a user must spend to request a song")
             add_text("Supplementary to 'Require Superchat to request'")
-        with tooltip("dark_mode_checkbox"):
-            add_text("Whether or not the UI will use dark or light mode")
+        with tooltip("theme_dropdown_config"):
+            add_text("Select a theme for the application")
         with tooltip("enforce_user_whitelist_checkbox"):
             add_text("Whether or not to enforce the user Whitelist")
         with tooltip("enforce_id_whitelist_checkbox"):
@@ -1762,16 +1687,36 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
             add_text("Whether or not to automatically ban users who try to request banned songs")
             
         
-    create_dark_theme()
-    create_light_theme()
-    create_viewport(title='Configure LYTE', width=750, height=480)
-    apply_theme("dark_theme" if DARK_MODE else "light_theme")
-    setup_dearpygui()
-    show_viewport()
-    set_exit_callback(on_close_attempt)
-    configure_viewport(0, resizable=False)
-    start_dearpygui()
-    destroy_context()
+    # Ensure current theme exists, fallback to first available or dark_theme
+    themes = get_available_themes()
+    current = get_current_theme()
+    if not themes or current not in themes:
+        if themes:
+            set_current_theme(list(themes.keys())[0])
+        else:
+            # No themes loaded - create a basic dark theme as fallback
+            set_current_theme("dark_theme")
+            logging.warning("No themes available, using default dark theme")
+    
+    try:
+        create_viewport(title='Configure LYTE', width=750, height=480)
+        try:
+            apply_theme(get_current_theme())
+        except Exception as theme_apply_error:
+            logging.error(f"Error applying theme: {theme_apply_error}")
+            # Continue without theme
+        setup_dearpygui()
+        show_viewport()
+        set_exit_callback(on_close_attempt)
+        configure_viewport(0, resizable=False)
+        start_dearpygui()
+    except Exception as e:
+        logging.error(f"Error in show_config_menu: {e}")
+        logging.error(traceback.format_exc())
+        # Re-raise to see the full error
+        raise
+    finally:
+        destroy_context()
 
 
 # =============================================================================
@@ -1810,7 +1755,7 @@ def update_slider_thread() -> None:
     Runs in a background thread to continuously update the progress slider
     and time display, respecting user input to prevent conflicts.
     """
-    global ignore_slider_callback, last_gui_update_time
+    global ignore_slider_callback
 
     # Wait for GUI to be ready
     while not does_item_exist(song_slider_tag) and not should_exit:
@@ -1872,7 +1817,7 @@ def enable_update_menu_thread() -> None:
 show_config_menu()
 
 # Wait for valid configuration
-while not config_success and not should_exit:
+while not should_exit:
     not_live = False
     invalid_id = False
     load_config()

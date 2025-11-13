@@ -1,0 +1,46 @@
+{
+    "name": "Light Theme",
+    "colors": {
+        "WindowBg": [248, 250, 252, 255],
+        "FrameBg": [235, 242, 248, 255],
+        "Button": [200, 230, 230, 255],
+        "ButtonHovered": [150, 210, 210, 255],
+        "ButtonActive": [100, 190, 190, 255],
+        "Text": [40, 50, 60, 255],
+        "SliderGrab": [80, 180, 180, 255],
+        "SliderGrabActive": [60, 160, 160, 255],
+        "Header": [220, 240, 240, 255],
+        "ScrollbarBg": [235, 242, 248, 128],
+        "ScrollbarGrab": [180, 220, 220, 255],
+        "ScrollbarGrabHovered": [150, 210, 210, 255],
+        "ScrollbarGrabActive": [100, 190, 190, 255],
+        "CheckMark": [80, 180, 180, 255],
+        "HeaderHovered": [180, 220, 220, 255],
+        "HeaderActive": [150, 210, 210, 255],
+        "Tab": [200, 230, 230, 255],
+        "TabHovered": [150, 210, 210, 255],
+        "TabActive": [100, 190, 190, 255],
+        "TitleBg": [235, 242, 248, 255],
+        "TitleBgActive": [220, 240, 240, 255],
+        "TitleBgCollapsed": [235, 242, 248, 128],
+        "MenuBarBg": [220, 240, 240, 255],
+        "Border": [180, 220, 220, 255],
+        "Separator": [180, 220, 220, 255],
+        "PopupBg": [248, 250, 252, 240],
+        "TextSelectedBg": [150, 210, 210, 150]
+    },
+    "styles": {
+        "FrameRounding": 8.0,
+        "FrameBorderSize": 0.5,
+        "WindowRounding": 12.0,
+        "ScrollbarSize": 12.0,
+        "ScrollbarRounding": 8.0,
+        "TabRounding": 8.0,
+        "GrabRounding": 8.0,
+        "ChildRounding": 8.0,
+        "PopupRounding": 8.0,
+        "ItemSpacing": [8, 6],
+        "ItemInnerSpacing": [6, 6]
+    }
+}
+
