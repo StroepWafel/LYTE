@@ -335,6 +335,19 @@ def initialize_chat() -> bool:
     """
     global chat
     try:
+        # Clean up any existing chat object before creating a new one
+        # This prevents issues when switching from a regular video to a live video
+        try:
+            if 'chat' in globals():
+                old_chat = globals()['chat']
+                if old_chat is not None:
+                    try:
+                        if hasattr(old_chat, 'terminate'):
+                            old_chat.terminate()
+                    except Exception:
+                        pass
+        except (KeyError, AttributeError):
+            pass
         chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
         return True
     except Exception as e:
@@ -678,7 +691,32 @@ def update_now_playing() -> None:
 # UTILITY FUNCTIONS
 # =============================================================================
 
+def is_youtube_live(video_id):
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    headers = {"User-Agent":"Mozilla/5.0"}
+    resp = requests.get(url, headers=headers, timeout=10)
+    html = resp.text
 
+    # try find JSON
+    m = re.search(r"ytInitialPlayerResponse\s*=\s*(\{.+?\});", html)
+    if m:
+        try:
+            data = json.loads(m.group(1))
+            if data.get("videoDetails", {}).get("isLive") == True:
+                return True
+            # or check data.get("playabilityStatus", {}).get("liveStreamability")
+        except json.JSONDecodeError:
+            pass
+
+    # fallback thumbnail trick
+    if "_live.jpg" in html:
+        return True
+
+    # fallback badge text
+    if "LIVE NOW" in html.upper():
+        return True
+
+    return False
 
 def show_download_ui(latest_version: str) -> None:
     """
@@ -1595,7 +1633,7 @@ def build_gui() -> None:
     start_dearpygui()
     destroy_context()
 
-def show_config_menu(invalid_id: bool = False) -> None:
+def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
     """
     Display the initial configuration menu.
     
@@ -1658,7 +1696,10 @@ def show_config_menu(invalid_id: bool = False) -> None:
         add_input_text(label="YouTube Livestream ID", default_value=config["YOUTUBE_VIDEO_ID"], tag="id_input")
 
         if invalid_id:
-            add_text("Invalid or inaccessible livestream ID.", color=(255, 100, 100), tag="invalid_id_warning")
+            add_text("Invalid or inaccessible livestream ID", color=(255, 100, 100), tag="invalid_id_warning")
+
+        if not_live:
+           add_text("Video is not a livestream", color=(255, 100, 100), tag="invalid_id_warning") 
 
         add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
         add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
@@ -1824,11 +1865,20 @@ show_config_menu()
 
 # Wait for valid configuration
 while not config_success and not should_exit:
+    not_live = False
+    invalid_id = False
     load_config()
+    # Ensure we're using the latest video ID from config
+    current_video_id = YOUTUBE_VIDEO_ID
     if initialize_chat():
-        break  # valid ID, continue
-    logging.warning("Chat init failed. Reloading config window.")
-    show_config_menu(invalid_id=True)
+        # Double-check we're still validating the same video ID
+        if current_video_id == YOUTUBE_VIDEO_ID and is_youtube_live(YOUTUBE_VIDEO_ID):
+            break
+        logging.warning("Video is not a Live. Reloading config window.")
+        show_config_menu(not_live = True)
+    else:
+        logging.warning("Chat init failed. Reloading config window.")
+        show_config_menu(invalid_id= True)
 
 # Load final configuration
 load_config()
