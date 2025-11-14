@@ -16,11 +16,34 @@ def get_app_folder() -> str:
     Determine the application folder path.
     
     Returns:
-        str: Path to the application directory (executable dir if frozen, script dir otherwise)
+        str: Path to the application directory (user data dir if frozen, script dir otherwise)
     """
     if getattr(sys, 'frozen', False):
-        # When compiled with PyInstaller, return the directory containing the executable
-        return os.path.dirname(sys.executable)
+        # When compiled with PyInstaller, use a user-writable directory
+        # This avoids permission issues when installed in Program Files
+        if sys.platform == 'win32':
+            # Use LOCALAPPDATA on Windows (AppData\Local\LYTE\)
+            appdata_dir = os.getenv('LOCALAPPDATA')
+            if appdata_dir:
+                app_folder = os.path.join(appdata_dir, 'LYTE')
+                os.makedirs(app_folder, exist_ok=True)
+                return app_folder
+        # Fallback for other platforms or if LOCALAPPDATA is not set
+        # Try to use a user-writable location relative to the executable
+        executable_dir = os.path.dirname(sys.executable)
+        # Check if we can write to the executable directory
+        try:
+            test_file = os.path.join(executable_dir, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            return executable_dir
+        except (OSError, PermissionError):
+            # Can't write to executable dir, use user home directory
+            home_dir = os.path.expanduser('~')
+            app_folder = os.path.join(home_dir, '.lyte')
+            os.makedirs(app_folder, exist_ok=True)
+            return app_folder
     
     # For development/script mode, find the directory containing main.py
     # Start by checking if we can find main.py relative to this file's location
