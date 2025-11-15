@@ -8,8 +8,24 @@ import logging
 import os
 import sys
 from datetime import datetime
+import platform
+import subprocess
 
 # =============================================================================
+
+def show_folder(folder_location: str) -> None:
+    """
+    Open the application folder in the system's file explorer.
+    """
+    system = platform.system()
+
+    if system == "Windows":
+        os.startfile(folder_location)
+    elif system == "Darwin":  # macOS
+        subprocess.Popen(["open", folder_location])
+    else:  # Linux
+        subprocess.Popen(["xdg-open", folder_location])
+
 
 def get_app_folder() -> str:
     """

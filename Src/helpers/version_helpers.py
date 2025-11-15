@@ -66,6 +66,8 @@ def fetch_latest_version() -> str:
         # Remove 'v' prefix if present
         if latest_version.startswith("v"):
             latest_version = latest_version[1:]
+        if latest_version.endswith("-Release"):
+            latest_version = latest_version.replace("-Release", "")
             
         logging.info(f"Latest version available: {latest_version}")
         return latest_version

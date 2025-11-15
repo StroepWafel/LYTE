@@ -5,7 +5,7 @@
 
 # ==============================================================================
 # Application version
-CURRENT_VERSION = "1.8.1"
+CURRENT_VERSION = "1.8.2"
 # ==============================================================================
 
 # Standard Library Imports
@@ -57,7 +57,8 @@ from helpers.time_helpers import (
 from helpers.file_helpers import (
     get_app_folder,
     ensure_file_exists,
-    ensure_json_valid
+    ensure_json_valid,
+    show_folder
 )
 from helpers.update_helpers import (
     run_installer,
@@ -1169,7 +1170,12 @@ def build_gui() -> None:
                                          check=is_current, tag=f"theme_menu_{theme_name}")
                     else:
                         add_menu_item(label="No themes available", enabled=False)
-                    
+                add_menu_item(label="Open Themes Folder", callback=lambda: show_folder(THEMES_FOLDER), tag="open_themes_folder_menu")
+
+                with tooltip("open_themes_folder_menu"):
+                    add_text("Open the folder where themes are stored")
+
+
             with menu(label="Help"):
                 add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
                 add_separator()
