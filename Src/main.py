@@ -1176,22 +1176,6 @@ def build_gui() -> None:
                     add_text("Open the folder where themes are stored")
 
 
-            with menu(label="Help"):
-                add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
-                add_separator()
-                add_menu_item(label="Check for Updates", callback=check_for_updates_wrapper, tag="check_updates_menu")
-                add_menu_item(label="View Update Details...", callback=lambda: show_update_details_window(), tag="update_details_menu", enabled=False)
-                add_menu_item(label="Open GitHub Issues", callback=lambda: open_url("https://github.com/StroepWafel/LYTE/issues"), tag="github_issues_menu")
-                
-                with tooltip("version_menu"):
-                    add_text("Current version of LYTE")
-                with tooltip("check_updates_menu"):
-                    add_text("Check if a newer version is available")
-                with tooltip("update_details_menu"):
-                    add_text("View the latest release notes and actions")
-                with tooltip("github_issues_menu"):
-                    add_text("Open the GitHub issues page in your browser")
-                    
             with menu(label="Moderation"):
                 add_menu_item(label="Manage Banned Users", tag="banned_users_menu",
                               callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
@@ -1215,6 +1199,30 @@ def build_gui() -> None:
                     add_text("Manage videos that are allowed to be requested when whitelist is enforced")
                 with tooltip("settings_menu"):
                     add_text("Manage general settings")
+
+
+            with menu(label="Help"):
+                add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
+                add_separator()
+                add_menu_item(label="Check for Updates", callback=check_for_updates_wrapper, tag="check_updates_menu")
+                add_menu_item(label="View Update Details...", callback=lambda: show_update_details_window(), tag="update_details_menu", enabled=False)
+                add_menu_item(label="Open GitHub Issues", callback=lambda: open_url("https://github.com/StroepWafel/LYTE/issues"), tag="github_issues_menu")
+                add_menu_item(label="Open General Documentation", callback=lambda: open_url("https://lyte-docs.stroepwafel.au/"), tag="general_docs_menu")
+                add_menu_item(label="Open Theme Documentation", callback=lambda: open_url("https://lyte-docs.stroepwafel.au/docs/other-information/theme-documentation"), tag="theme_docs_menu")
+                
+                with tooltip("version_menu"):
+                    add_text("Current version of LYTE")
+                with tooltip("check_updates_menu"):
+                    add_text("Check if a newer version is available")
+                with tooltip("update_details_menu"):
+                    add_text("View the latest release notes and actions")
+                with tooltip("github_issues_menu"):
+                    add_text("Open the GitHub issues page in your browser")
+                with tooltip("general_docs_menu"):
+                    add_text("Open the general documentation in your browser")
+                with tooltip("theme_docs_menu"):
+                    add_text("Open the theme documentation in your browser")
+                    
         # =============================================================================
         # NOW PLAYING DISPLAY
         # =============================================================================
