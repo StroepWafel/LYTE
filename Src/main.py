@@ -24,7 +24,6 @@ import webbrowser
 
 # Third-Party Imports
 import pytchat  # YouTube live chat integration
-import yt_dlp  # YouTube video/audio extraction
 import requests  # HTTP requests
 from plyer import notification  # Desktop notifications
 import vlc  # Media player (python-vlc)
@@ -70,6 +69,7 @@ from helpers.version_helpers import (
 )
 from helpers.theme_helpers import (
     init_theme_system,
+    unload_all_themes,
     load_all_themes,
     create_default_theme_files,
     apply_theme,
@@ -106,6 +106,9 @@ WHITELISTED_USERS_PATH = os.path.join(APP_FOLDER, 'whitelisted_users.json')
 # Themes directory
 THEMES_FOLDER = os.path.join(APP_FOLDER, 'themes')
 init_theme_system(THEMES_FOLDER)
+
+# close gui
+closeGui = False
 
 # =============================================================================
 # LOGGING SETUP
@@ -330,6 +333,84 @@ def check_for_updates_wrapper() -> None:
         except Exception:
             pass
 
+# =============================================================================
+# TEMPORARY TEST FUNC FOR RELOADING THEMES
+# =============================================================================
+THEME_MENU_TAG = "theme_menu_root"
+THEME_MENU_EMPTY_TAG = "theme_menu_empty"
+
+def rebuild_theme_menu_items() -> None:
+    """
+    Regenerate the Theme menu items based on the currently available themes.
+    """
+    parent_tag = THEME_MENU_TAG
+    if not does_item_exist(parent_tag):
+        logging.warning("Theme menu not found; cannot rebuild theme entries")
+        return
+
+    # Remove existing theme menu items we manage (by parent/child relationship)
+    try:
+        children = get_item_children(parent_tag, 1) or []
+        for child_tag in list(children):
+            try:
+                if isinstance(child_tag, str) and (
+                    child_tag.startswith("theme_menu_") or child_tag == THEME_MENU_EMPTY_TAG
+                ):
+                    delete_item(child_tag)
+            except Exception as e:
+                logging.error(f"Error removing theme menu item {child_tag}: {e}")
+    except Exception as e:
+        logging.error(f"Error while cleaning theme menu items: {e}")
+
+    # Rebuild menu entries from available themes
+    theme_items = get_theme_dropdown_items()
+    if theme_items:
+        for display_name in theme_items:
+            if not display_name:
+                logging.warning("Skipping empty display name in theme menu")
+                continue
+            theme_name = get_theme_name_from_display(display_name)
+            if not theme_name:
+                logging.warning(f"Skipping theme menu entry for display name {display_name!r} - got None theme name")
+                continue
+            is_current = theme_name == get_current_theme()
+
+            # Ensure any stale item with this tag is removed before creating a new one
+            menu_tag = f"theme_menu_{theme_name}"
+            try:
+                if does_item_exist(menu_tag):
+                    delete_item(menu_tag)
+            except Exception as e:
+                logging.error(f"Error deleting existing theme menu item {menu_tag}: {e}")
+
+            def make_theme_callback(tn):
+                def callback(sender, app_data, user_data):
+                    logging.debug(f"Theme menu callback triggered for theme: {tn!r}")
+                    select_theme_by_name(tn)
+                return callback
+
+            add_menu_item(
+                label=display_name,
+                callback=make_theme_callback(theme_name),
+                check=is_current,
+                tag=menu_tag,
+                parent=parent_tag,
+            )
+    else:
+        # Clean up any previous "empty" marker before recreating it
+        try:
+            if does_item_exist(THEME_MENU_EMPTY_TAG):
+                delete_item(THEME_MENU_EMPTY_TAG)
+        except Exception as e:
+            logging.error(f"Error deleting existing empty theme menu item {THEME_MENU_EMPTY_TAG}: {e}")
+        add_menu_item(label="No themes available", enabled=False, tag=THEME_MENU_EMPTY_TAG, parent=parent_tag)
+
+def reload_themes() -> None:
+    """Reload all themes from disk."""
+    unload_all_themes()
+    load_all_themes()
+    apply_theme(get_current_theme())
+    rebuild_theme_menu_items()
 
 # =============================================================================
 # APPLICATION CONTROL FUNCTIONS
@@ -1093,6 +1174,8 @@ def open_url(url: str) -> None:
 # =============================================================================
 
 def build_gui() -> None:
+
+    
     """
     Build and display the main application GUI.
     
@@ -1146,47 +1229,28 @@ def build_gui() -> None:
                     add_text("Exit the application")
                     
             with menu(label="View"):
-                with menu(label="Theme"):
-                    # Add menu items for each theme
-                    theme_items = get_theme_dropdown_items()
-                    if theme_items:
-                        for display_name in theme_items:
-                            if not display_name:
-                                logging.warning(f"Skipping empty display name in theme menu")
-                                continue
-                            theme_name = get_theme_name_from_display(display_name)
-                            if not theme_name or theme_name is None:
-                                logging.warning(f"Skipping theme menu entry for display name {display_name!r} - got None theme name")
-                                continue
-                            is_current = (theme_name == get_current_theme())
-                            # Use a closure to capture theme_name properly, prevents closure issue where all lambdas in a loop reference the same variable
-                            def make_theme_callback(tn):
-                                def callback(sender, app_data, user_data):
-                                    logging.debug(f"Theme menu callback triggered for theme: {tn!r}")
-                                    select_theme_by_name(tn)
-                                return callback
-                            add_menu_item(label=display_name, 
-                                         callback=make_theme_callback(theme_name),
-                                         check=is_current, tag=f"theme_menu_{theme_name}")
-                    else:
-                        add_menu_item(label="No themes available", enabled=False)
+                with menu(label="Theme", tag=THEME_MENU_TAG):
+                    rebuild_theme_menu_items()
                 add_menu_item(label="Open Themes Folder", callback=lambda: show_folder(THEMES_FOLDER), tag="open_themes_folder_menu")
+                add_menu_item(label="Reload themes", callback=lambda: reload_themes(), tag="reload_themes")
 
                 with tooltip("open_themes_folder_menu"):
                     add_text("Open the folder where themes are stored")
+                with tooltip("reload_themes"):
+                    add_text("Reload themes from the themes folder")
 
 
             with menu(label="Moderation"):
                 add_menu_item(label="Manage Banned Users", tag="banned_users_menu",
-                              callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
+                            callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
                 add_menu_item(label="Manage Banned Videos", tag="banned_videos_menu",
-                              callback=lambda: (load_banned_ids_wrapper(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
+                            callback=lambda: (load_banned_ids_wrapper(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
                 add_menu_item(label="Manage Whitelisted Users", tag="whitelist_users_menu",
-                              callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
+                            callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
                 add_menu_item(label="Manage Whitelisted Videos", tag="whitelist_videos_menu",
-                              callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
+                            callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
                 add_menu_item(label="Settings", tag="settings_menu",
-                              callback=lambda: (load_config(), configure_item("SettingsWindow", show=True)))
+                            callback=lambda: (load_config(), configure_item("SettingsWindow", show=True)))
                 
                 
                 with tooltip("banned_users_menu"):
@@ -1276,7 +1340,7 @@ def build_gui() -> None:
         add_text("Song Progress")
         with group(horizontal=True):
             add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
-                             width=400, callback=on_song_slider_change, format="")
+                            width=400, callback=on_song_slider_change, format="")
             add_text("00:00 / 00:00", tag="song_time_text")
             
         with tooltip(song_slider_tag):
@@ -1397,7 +1461,7 @@ def build_gui() -> None:
 
             # Display banned users list
             add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS], 
-                       tag="banned_users_list", width=350, num_items=8)
+                    tag="banned_users_list", width=350, num_items=8)
             add_spacer(height=10)
 
             # Add new banned user
@@ -1434,7 +1498,7 @@ def build_gui() -> None:
             add_spacer(height=10)
             with group(horizontal=True):
                 add_button(label="Open Release Page", tag="open_release_button",
-                           callback=lambda: open_url(LATEST_RELEASE_DETAILS.get("html_url", "https://github.com/StroepWafel/LYTE/releases/latest")))
+                        callback=lambda: open_url(LATEST_RELEASE_DETAILS.get("html_url", "https://github.com/StroepWafel/LYTE/releases/latest")))
                 add_button(label="Download Installer", tag="update_download_button", callback=download_installer)
                 add_button(label="Run Installer", tag="update_run_button", callback=run_installer_wrapper)
                 add_button(label="Ignore This Update", tag="ignore_update_button", callback=lambda: ignore_update_action())
@@ -1457,7 +1521,7 @@ def build_gui() -> None:
 
             # Display banned videos list
             add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS], 
-                       tag="banned_ids_list", width=350, num_items=8)
+                    tag="banned_ids_list", width=350, num_items=8)
             add_spacer(height=10)
 
             # Add new banned video
@@ -1489,7 +1553,7 @@ def build_gui() -> None:
 
             # Display whitelisted users list
             add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS], 
-                       tag="whitelisted_users_list", width=350, num_items=8)
+                    tag="whitelisted_users_list", width=350, num_items=8)
             add_spacer(height=10)
 
             # Add new whitelisted user
@@ -1521,7 +1585,7 @@ def build_gui() -> None:
 
             # Display whitelisted videos list
             add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS], 
-                       tag="whitelisted_ids_list", width=350, num_items=8)
+                    tag="whitelisted_ids_list", width=350, num_items=8)
             add_spacer(height=10)
 
             # Add new whitelisted video
@@ -1570,7 +1634,8 @@ def build_gui() -> None:
         logging.error(traceback.format_exc())
         raise
     finally:
-        destroy_context()
+        destroy_context()  
+
 
 def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
     """

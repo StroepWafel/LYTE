@@ -15,6 +15,7 @@ from dearpygui.dearpygui import (
     bind_theme,
     configure_item,
     does_item_exist,
+    delete_item,
     theme,
     theme_component,
     mvAll,
@@ -550,4 +551,31 @@ def set_current_theme(theme_name: str) -> None:
         CURRENT_THEME = "dark_theme"
     else:
         CURRENT_THEME = theme_name
+
+def unload_all_themes() -> None:
+    """
+    Unload all themes from DearPyGui and clear the internal registry.
+    
+    This deletes the created DearPyGui theme items (if they still exist)
+    and resets the AVAILABLE_THEMES mapping so themes can be cleanly
+    reloaded from disk.
+    """
+    global AVAILABLE_THEMES
+    try:
+        # Delete any existing DearPyGui theme items by their tag
+        for theme_name in list(AVAILABLE_THEMES.keys()):
+            try:
+                if does_item_exist(theme_name):
+                    delete_item(theme_name)
+                    logging.info(f"Unloaded theme item: {theme_name}")
+            except Exception as e:
+                logging.error(f"Error unloading theme item {theme_name}: {e}")
+        
+        # Clear internal registry of themes
+        AVAILABLE_THEMES.clear()
+        logging.info("Cleared AVAILABLE_THEMES registry")
+    except Exception as e:
+        logging.error(f"Error in unload_all_themes: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
 
