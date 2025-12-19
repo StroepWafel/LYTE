@@ -158,9 +158,11 @@ To find a channel's ID you can use [this site](https://www.tunepocket.com/youtub
 # Gallery
 
 Settings UI:  
-<img width="676" height="407" alt="Settings UI" src="https://github.com/user-attachments/assets/a707cf1d-2b41-4979-af96-5202d3aa583e" />  
+<img width="731" height="443" alt="SettingsUI" src="https://github.com/user-attachments/assets/5ed48e4f-61a2-4693-b605-c2dd849a9ff8" />
+
+
 Control Panel:  
-<img width="681" height="407" alt="Control Panel" src="https://github.com/user-attachments/assets/1c4701aa-4d4a-4bf5-be86-15b2e75d0be2" />  
+<img width="1311" height="459" alt="MainUI" src="https://github.com/user-attachments/assets/26a1b860-15bd-478a-a615-6d2204a7fbb6" />
 
 
 # Notes
