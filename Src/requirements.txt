@@ -6,3 +6,4 @@ python-vlc
 pyinstaller
 dearpygui
 forex-python
+watchdog

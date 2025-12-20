@@ -28,6 +28,8 @@ import requests  # HTTP requests
 from plyer import notification  # Desktop notifications
 import vlc  # Media player (python-vlc)
 from dearpygui.dearpygui import *  # GUI framework
+from watchdog.observers import Observer  # File system monitoring
+from watchdog.events import FileSystemEventHandler  # File system event handling
 # Currency conversion is handled by helpers.currency_helpers
 
 # Local Imports
@@ -413,6 +415,89 @@ def reload_themes() -> None:
     rebuild_theme_menu_items()
 
 # =============================================================================
+# THEME FILE WATCHER
+# =============================================================================
+
+class ThemeFileHandler(FileSystemEventHandler):
+    """
+    File system event handler for theme files.
+    
+    Automatically reloads themes when theme files are created, modified, or deleted.
+    """
+    def __init__(self):
+        super().__init__()
+        self.last_reload_time = 0
+        self.reload_debounce_seconds = 0.5  # Debounce rapid file changes
+    
+    def on_any_event(self, event):
+        """
+        Handle any file system event in the themes folder.
+        
+        Args:
+            event: File system event object
+        """
+        # Only process events for JSON files (theme files)
+        if event.is_directory:
+            return
+        
+        if not event.src_path.endswith('.json'):
+            return
+        
+        # Debounce rapid changes (e.g., when saving a file triggers multiple events)
+        current_time = time.time()
+        if current_time - self.last_reload_time < self.reload_debounce_seconds:
+            return
+        
+        # Reload themes when files are created, modified, or deleted
+        if event.event_type in ('created', 'modified', 'deleted'):
+            self.last_reload_time = current_time
+            try:
+                logging.info(f"Theme file change detected ({event.event_type}): {os.path.basename(event.src_path)}")
+                reload_themes()
+                logging.info("Themes reloaded automatically")
+            except Exception as e:
+                logging.error(f"Error reloading themes after file change: {e}")
+                logging.error(traceback.format_exc())
+
+# Global observer instance for theme file watching
+theme_observer = None
+
+def start_theme_file_watcher() -> None:
+    """
+    Start monitoring the themes folder for file changes.
+    
+    Runs in a background thread and automatically reloads themes when changes are detected.
+    """
+    global theme_observer
+    
+    if not os.path.exists(THEMES_FOLDER):
+        logging.warning(f"Themes folder does not exist: {THEMES_FOLDER}")
+        return
+    
+    try:
+        event_handler = ThemeFileHandler()
+        theme_observer = Observer()
+        theme_observer.schedule(event_handler, THEMES_FOLDER, recursive=False)
+        theme_observer.start()
+        logging.info(f"Started theme file watcher for: {THEMES_FOLDER}")
+    except Exception as e:
+        logging.error(f"Error starting theme file watcher: {e}")
+        logging.error(traceback.format_exc())
+
+def stop_theme_file_watcher() -> None:
+    """Stop monitoring the themes folder for file changes."""
+    global theme_observer
+    
+    if theme_observer:
+        try:
+            theme_observer.stop()
+            theme_observer.join()
+            theme_observer = None
+            logging.info("Stopped theme file watcher")
+        except Exception as e:
+            logging.error(f"Error stopping theme file watcher: {e}")
+
+# =============================================================================
 # APPLICATION CONTROL FUNCTIONS
 # =============================================================================
 
@@ -502,6 +587,9 @@ def quit_program() -> None:
     should_exit = True
     
     logging.info("Shutting down program")
+
+    # Stop theme file watcher
+    stop_theme_file_watcher()
 
     # Clean up VLC resources
     try:
@@ -1887,6 +1975,20 @@ def enable_update_menu_thread() -> None:
         except Exception:
             time.sleep(2)
 
+def start_theme_watcher_thread() -> None:
+    """
+    Start the theme file watcher after the GUI is ready.
+    
+    Waits for the main window to exist before starting the file watcher
+    to ensure the GUI is fully initialized.
+    """
+    # Wait for GUI to be ready
+    while not does_item_exist("MainWindow") and not should_exit:
+        time.sleep(0.1)
+    
+    if not should_exit:
+        start_theme_file_watcher()
+
 
 # =============================================================================
 # APPLICATION STARTUP
@@ -1925,6 +2027,7 @@ threading.Thread(target=vlc_loop, daemon=True).start()
 threading.Thread(target=poll_chat, daemon=True).start()
 threading.Thread(target=update_slider_thread, daemon=True).start()
 threading.Thread(target=update_now_playing_thread, daemon=True).start()
+threading.Thread(target=start_theme_watcher_thread, daemon=True).start()
 
 # Main application loop
 while not should_exit:
