@@ -8,3 +8,4 @@ __pycache__/
 LICENCE
 README.md
 Src/config.json
+Src/themes/demo_theme.json

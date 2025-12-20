@@ -1778,7 +1778,7 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
             logging.warning("No themes available, using default dark theme")
     
     try:
-        create_viewport(title='Configure LYTE', width=750, height=480)
+        create_viewport(title='Configure LYTE', width=750, height=485)
         try:
             apply_theme(get_current_theme())
         except Exception as theme_apply_error:
