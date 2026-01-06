@@ -30,6 +30,7 @@ class Settings:
     ENFORCE_USER_WHITELIST: bool = False
     AUTOREMOVE_SONGS: bool = True
     AUTOBAN_USERS: bool = False
+    SONG_FINISH_NOTIFICATIONS: bool = False
     
     @classmethod
     def set_path(cls, path: str) -> None:
@@ -56,7 +57,8 @@ class Settings:
                     # Handle boolean fields that might be stored as strings
                     if key in ("TOAST_NOTIFICATIONS", "ALLOW_URLS", "REQUIRE_MEMBERSHIP", 
                               "REQUIRE_SUPERCHAT", "ENFORCE_ID_WHITELIST", 
-                              "ENFORCE_USER_WHITELIST", "AUTOREMOVE_SONGS", "AUTOBAN_USERS"):
+                              "ENFORCE_USER_WHITELIST", "AUTOREMOVE_SONGS", "AUTOBAN_USERS", 
+                              "SONG_FINISH_NOTIFICATIONS"):
                         if isinstance(value, str):
                             setattr(cls, key, value.lower() == "true")
                         else:
@@ -98,6 +100,7 @@ class Settings:
                         "ENFORCE_USER_WHITELIST": str(cls.ENFORCE_USER_WHITELIST),
                         "AUTOREMOVE_SONGS": str(cls.AUTOREMOVE_SONGS),
                         "AUTOBAN_USERS": str(cls.AUTOBAN_USERS),
+                        "SONG_FINISH_NOTIFICATIONS": str(cls.SONG_FINISH_NOTIFICATIONS),
                     },
                     f,
                     indent=4
@@ -122,5 +125,6 @@ class Settings:
             "ENFORCE_USER_WHITELIST": str(cls.ENFORCE_USER_WHITELIST),
             "AUTOREMOVE_SONGS": str(cls.AUTOREMOVE_SONGS),
             "AUTOBAN_USERS": str(cls.AUTOBAN_USERS),
+            "SONG_FINISH_NOTIFICATIONS": str(cls.SONG_FINISH_NOTIFICATIONS),
         }
 

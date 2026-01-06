@@ -153,10 +153,16 @@ BANNED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
 WHITELISTED_USERS: list[dict] = []  # {"id": "UCxxxx", "name": "ChannelName"}
 WHITELISTED_IDS: list[dict] = []    # {"id": "xxxxxx", "name": "VideoName"}
 
+# Queue history - stores past queued songs (resets on app restart)
+QUEUE_HISTORY: list[dict] = []  # [{"user_id": "UCxxxx", "username": "Name", "song_id": "xxxxxx", "song_title": "Title"}]
+
 # Update detection state
 UPDATE_AVAILABLE: bool = False
 LATEST_RELEASE_DETAILS: dict = {}
 LATEST_VERSION: str = ""
+
+# Track user-initiated skips
+user_initiated_skip = False
 
 
 # =============================================================================
@@ -179,7 +185,8 @@ default_config = {
     "ENFORCE_ID_WHITELIST": "False",          # Only allow whitelisted video IDs
     "ENFORCE_USER_WHITELIST": "False",        # Only allow whitelisted users
     "AUTOREMOVE_SONGS": "True",               # Auto-remove finished songs from queue
-    "AUTOBAN_USERS": "False"                  # Auto-ban users who request banned videos
+    "AUTOBAN_USERS": "False",                 # Auto-ban users who request banned videos
+    "SONG_FINISH_NOTIFICATIONS": "False"      # Notify when songs finish naturally (not skipped)
 }
 
 # =============================================================================
@@ -231,10 +238,39 @@ def on_next_item(event) -> None:
     Callback function triggered when VLC moves to the next item in the playlist.
     
     If auto-remove is enabled, this removes the finished song from the queue.
+    Also handles notifications for the new song starting.
     
     Args:
         event: VLC event object (unused but required by VLC callback signature)
     """
+    global user_initiated_skip, QUEUE_HISTORY
+    
+    # Check if this was a natural completion (not user-initiated skip)
+    is_natural_completion = not user_initiated_skip
+    
+    # Reset the flag for next time
+    user_initiated_skip = False
+    
+    # Show notification for the NEW song starting if it finished naturally and notifications are enabled
+    if is_natural_completion and Settings.SONG_FINISH_NOTIFICATIONS:
+        try:
+            # Get the new song that's now playing
+            media_player = player.get_media_player()
+            if media_player:
+                media = media_player.get_media()
+                if media:
+                    media.parse_with_options(vlc.MediaParseFlag.local, timeout=1000)
+                    new_song_title = media.get_meta(vlc.Meta.Title)
+                    
+                    if new_song_title:
+                        notification.notify(
+                            title="Now Playing",
+                            message=f"'{new_song_title}'",
+                            timeout=5
+                        )
+        except Exception as e:
+            logging.error(f"Error showing new song notification: {e}")
+    
     if Settings.AUTOREMOVE_SONGS:
         try:
             # Always remove the first item (the one that just finished)
@@ -620,6 +656,11 @@ def get_song_length() -> float:
     length_sec = length_ms / 1000
     return length_sec
 
+def set_user_initiated_skip() -> None:
+    """Mark that the next song change is user-initiated (skip)."""
+    global user_initiated_skip
+    user_initiated_skip = True
+
 def on_song_slider_change(sender, app_data, user_data) -> None:
     """
     Handle song progress slider changes.
@@ -681,6 +722,7 @@ def queue_song(video_id: str, requester: str, requesterUUID: str) -> None:
         requester: Username who requested the song
         requesterUUID: Unique identifier for the requester
     """
+    global QUEUE_HISTORY
     youtube_url = "https://music.youtube.com/watch?v=" + video_id
     try:
         # Get direct audio stream URL
@@ -689,6 +731,14 @@ def queue_song(video_id: str, requester: str, requesterUUID: str) -> None:
         title = get_video_title(youtube_url)
         media.set_meta(vlc.Meta.Title, title)
         media_list.add_media(media)
+        
+        # Add to queue history
+        QUEUE_HISTORY.append({
+            "user_id": requesterUUID,
+            "username": requester,
+            "song_id": video_id,
+            "song_title": title
+        })
         
         logging.info(f"Queued: {youtube_url} as {title}. Requested by {requester}, UUID: {requesterUUID}")
 
@@ -699,6 +749,10 @@ def queue_song(video_id: str, requester: str, requesterUUID: str) -> None:
         
         # Show notification
         show_toast(video_id, requester)
+        
+        # Refresh queue history window if it exists
+        if does_item_exist("queue_history_list"):
+            refresh_queue_history_list()
 
     except Exception as e:
         logging.warning(f"Error queuing song {youtube_url}: {e}")
@@ -961,6 +1015,14 @@ def refresh_whitelisted_ids_list() -> None:
     configure_item("whitelisted_ids_list",
                    items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS])
 
+def refresh_queue_history_list() -> None:
+    """Update the queue history list in the GUI."""
+    if does_item_exist("queue_history_list"):
+        # Display in format: "Song Title - Requested by Username (User ID) [Song ID]"
+        items = [f"{item['song_title']} - Requested by {item['username']} ({item['user_id']}) [{item['song_id']}]" 
+                 for item in QUEUE_HISTORY]
+        configure_item("queue_history_list", items=items)
+
 # =============================================================================
 # BAN/UNBAN CALLBACK FUNCTIONS
 # =============================================================================
@@ -1126,6 +1188,91 @@ def unwhitelist_id_callback() -> None:
         WHITELISTED_IDS = [u for u in WHITELISTED_IDS if u["id"] != selected_id]
         save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
         refresh_whitelisted_ids_list()
+
+def extract_queue_item_info(item: str) -> dict:
+    """
+    Extract information from queue history listbox item.
+    
+    Format: "Song Title - Requested by Username (User ID) [Song ID]"
+    
+    Args:
+        item: Listbox item string
+        
+    Returns:
+        dict: Dictionary with user_id, username, song_id, song_title
+    """
+    try:
+        # Extract song ID from [Song ID]
+        song_id_start = item.rfind('[')
+        song_id_end = item.rfind(']')
+        if song_id_start != -1 and song_id_end != -1:
+            song_id = item[song_id_start + 1:song_id_end]
+        else:
+            return None
+        
+        # Extract user ID from (User ID)
+        user_id_start = item.rfind('(')
+        user_id_end = item.rfind(')')
+        if user_id_start != -1 and user_id_end != -1:
+            user_id = item[user_id_start + 1:user_id_end]
+        else:
+            return None
+        
+        # Extract username and song title
+        # Format: "Song Title - Requested by Username (User ID) [Song ID]"
+        parts = item.split(" - Requested by ")
+        if len(parts) == 2:
+            song_title = parts[0]
+            username_part = parts[1].split(" (")[0]
+            username = username_part
+        else:
+            return None
+        
+        return {
+            "user_id": user_id,
+            "username": username,
+            "song_id": song_id,
+            "song_title": song_title
+        }
+    except Exception as e:
+        logging.error(f"Error extracting queue item info: {e}")
+        return None
+
+def ban_song_from_queue() -> None:
+    """Ban the song from the selected queue history entry."""
+    global BANNED_IDS
+    selected = get_value("queue_history_list")
+    if selected:
+        info = extract_queue_item_info(selected)
+        if info and info["song_id"]:
+            song_id = info["song_id"]
+            song_title = info["song_title"]
+            # Check if already banned
+            if not any(song_id == x["id"] for x in BANNED_IDS):
+                BANNED_IDS.append({"id": song_id, "name": song_title})
+                save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
+                refresh_banned_ids_list()
+                logging.info(f"Banned song '{song_title}' ({song_id}) from queue history")
+            else:
+                logging.info(f"Song '{song_title}' ({song_id}) is already banned")
+
+def ban_user_from_queue() -> None:
+    """Ban the user from the selected queue history entry."""
+    global BANNED_USERS
+    selected = get_value("queue_history_list")
+    if selected:
+        info = extract_queue_item_info(selected)
+        if info and info["user_id"]:
+            user_id = info["user_id"]
+            username = info["username"]
+            # Check if already banned
+            if not any(user_id == x["id"] for x in BANNED_USERS):
+                BANNED_USERS.append({"id": user_id, "name": username})
+                save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
+                refresh_banned_users_list()
+                logging.info(f"Banned user '{username}' ({user_id}) from queue history")
+            else:
+                logging.info(f"User '{username}' ({user_id}) is already banned")
 # =============================================================================
 # GUI INITIALIZATION & THEMES
 # =============================================================================
@@ -1239,6 +1386,7 @@ def build_gui() -> None:
         Settings.ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
         Settings.AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
         Settings.AUTOBAN_USERS = get_value("autoban_users_checkbox")
+        Settings.SONG_FINISH_NOTIFICATIONS = get_value("song_finish_notifications_checkbox")
 
         # Save updated configuration to file
         Settings.save()
@@ -1255,10 +1403,14 @@ def build_gui() -> None:
         with menu_bar() as _:
             with menu(label="File"):
                 add_menu_item(label="Reload Config", callback=load_config, tag="reload_config_menu")
+                add_menu_item(label="Settings", tag="settings_menu",
+                            callback=lambda: (load_config(), configure_item("SettingsWindow", show=True)))
                 add_menu_item(label="Quit", callback=lambda: quit_program(), tag="quit_menu")
                 
                 with tooltip("reload_config_menu"):
                     add_text("Reload configuration from file")
+                with tooltip("settings_menu"):
+                    add_text("Manage general settings")
                 with tooltip("quit_menu"):
                     add_text("Exit the application")
                     
@@ -1275,6 +1427,8 @@ def build_gui() -> None:
 
 
             with menu(label="Moderation"):
+                add_menu_item(label="View Queue History", tag="queue_history_menu",
+                            callback=lambda: (refresh_queue_history_list(), configure_item("QueueHistoryWindow", show=True)))
                 add_menu_item(label="Manage Banned Users", tag="banned_users_menu",
                             callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
                 add_menu_item(label="Manage Banned Videos", tag="banned_videos_menu",
@@ -1283,8 +1437,6 @@ def build_gui() -> None:
                             callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
                 add_menu_item(label="Manage Whitelisted Videos", tag="whitelist_videos_menu",
                             callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
-                add_menu_item(label="Settings", tag="settings_menu",
-                            callback=lambda: (load_config(), configure_item("SettingsWindow", show=True)))
                 
                 
                 with tooltip("banned_users_menu"):
@@ -1295,8 +1447,8 @@ def build_gui() -> None:
                     add_text("Manage users who are allowed to request songs when whitelist is enforced")
                 with tooltip("whitelist_videos_menu"):
                     add_text("Manage videos that are allowed to be requested when whitelist is enforced")
-                with tooltip("settings_menu"):
-                    add_text("Manage general settings")
+                with tooltip("queue_history_menu"):
+                    add_text("View past queued songs and ban songs or users")
 
 
             with menu(label="Help"):
@@ -1336,9 +1488,9 @@ def build_gui() -> None:
         with group(horizontal=True):
             add_button(label="Play / Pause", callback=lambda: player.pause(), width=130, tag="play_button")
             add_spacer(width=10)
-            add_button(label="Previous", callback=lambda: [player.previous(), update_now_playing()], width=110, tag="prev_button")
+            add_button(label="Previous", callback=lambda: [set_user_initiated_skip(), player.previous(), update_now_playing()], width=110, tag="prev_button")
             add_spacer(width=10)
-            add_button(label="Next", callback=lambda: [player.next(), update_now_playing()], width=110, tag="next_button")
+            add_button(label="Next", callback=lambda: [set_user_initiated_skip(), player.next(), update_now_playing()], width=110, tag="next_button")
             add_spacer(width=10)
             add_button(label="Refresh", callback=update_now_playing, width=110, tag="refresh_button")
 
@@ -1436,6 +1588,7 @@ def build_gui() -> None:
             
             # Notification settings
             add_checkbox(label="Enable Toast Notifications", default_value=Settings.TOAST_NOTIFICATIONS, tag="toast_checkbox")
+            add_checkbox(label="Notify When New Song Starts", default_value=Settings.SONG_FINISH_NOTIFICATIONS, tag="song_finish_notifications_checkbox")
             
             # Request permissions
             add_checkbox(label="Allow URL Requests", default_value=Settings.ALLOW_URLS, tag="allowURLs_checkbox")
@@ -1482,6 +1635,8 @@ def build_gui() -> None:
                 add_text("Whether or not to enforce the song ID Whitelist")
             with tooltip("autoremove_songs_checkbox"):
                 add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+            with tooltip("song_finish_notifications_checkbox"):
+                add_text("Whether or not to show desktop notifications when a new song starts playing (only when songs finish naturally, not when skipped)")
             with tooltip("autoban_users_checkbox"):
                 add_text("Whether or not to automatically ban users who try to request banned songs")
 
@@ -1640,6 +1795,36 @@ def build_gui() -> None:
 
             add_spacer(height=20)
             add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
+
+        # =============================================================================
+        # QUEUE HISTORY MANAGEMENT WINDOW
+        # =============================================================================
+        
+        with window(label="Queue History", tag="QueueHistoryWindow", show=False, width=600, height=500):
+            add_text("Queue History")
+            add_separator()
+            add_text("Past queued songs (resets on app restart)", color=(200, 200, 200))
+
+            # Display queue history list
+            add_listbox(items=[], 
+                    tag="queue_history_list", width=550, num_items=15)
+            add_spacer(height=10)
+
+            # Ban actions
+            with group(horizontal=True):
+                add_button(label="Ban Selected Song", callback=lambda: ban_song_from_queue(), tag="ban_song_from_queue_button")
+                add_spacer(width=10)
+                add_button(label="Ban Selected User", callback=lambda: ban_user_from_queue(), tag="ban_user_from_queue_button")
+            
+            with tooltip("queue_history_list"):
+                add_text("Select a song from the queue history")
+            with tooltip("ban_song_from_queue_button"):
+                add_text("Ban the song ID from the selected queue entry")
+            with tooltip("ban_user_from_queue_button"):
+                add_text("Ban the user from the selected queue entry")
+
+            add_spacer(height=20)
+            add_button(label="Close", callback=lambda: configure_item("QueueHistoryWindow", show=False))
     
     # =============================================================================
     # GUI FINALIZATION
@@ -1656,7 +1841,7 @@ def build_gui() -> None:
                 set_current_theme(list(themes.keys())[0])
             else:
                 set_current_theme("dark_theme")
-        create_viewport(title='LYTE Control Panel', width=1330, height=500)
+        create_viewport(title='LYTE Control Panel', width=1330, height=550)
         apply_theme(get_current_theme())
         setup_dearpygui()
         show_viewport()
@@ -1716,6 +1901,7 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         Settings.AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
         Settings.REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
         Settings.AUTOBAN_USERS = get_value("autoban_users_checkbox")
+        Settings.SONG_FINISH_NOTIFICATIONS = get_value("song_finish_notifications_checkbox_config")
 
         # Save config to file
         Settings.save()
@@ -1745,6 +1931,7 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         add_checkbox(label="Enforce User Whitelist", default_value=Settings.ENFORCE_USER_WHITELIST, tag="enforce_user_whitelist_checkbox")
         add_checkbox(label="Enforce Song Whitelist", default_value=Settings.ENFORCE_ID_WHITELIST, tag="enforce_id_whitelist_checkbox")
         add_checkbox(label="Automatically remove songs", default_value=Settings.AUTOREMOVE_SONGS, tag="autoremove_songs_checkbox")
+        add_checkbox(label="Notify When New Song Starts", default_value=Settings.SONG_FINISH_NOTIFICATIONS, tag="song_finish_notifications_checkbox_config")
         add_checkbox(label="Autoban users", default_value=Settings.AUTOBAN_USERS, tag="autoban_users_checkbox")
 
 
@@ -1793,6 +1980,8 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
             add_text("Whether or not to enforce the song ID Whitelist")
         with tooltip("autoremove_songs_checkbox"):
             add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
+        with tooltip("song_finish_notifications_checkbox_config"):
+            add_text("Whether or not to show desktop notifications when a new song starts playing (only when songs finish naturally, not when skipped)")
         with tooltip("autoban_users_checkbox"):
             add_text("Whether or not to automatically ban users who try to request banned songs")
             
@@ -1809,7 +1998,7 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
             logging.warning("No themes available, using default dark theme")
     
     try:
-        create_viewport(title='Configure LYTE', width=750, height=485)
+        create_viewport(title='Configure LYTE', width=750, height=535)
         try:
             apply_theme(get_current_theme())
         except Exception as theme_apply_error:
