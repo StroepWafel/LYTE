@@ -33,6 +33,7 @@ from watchdog.events import FileSystemEventHandler  # File system event handling
 # Currency conversion is handled by helpers.currency_helpers
 
 # Local Imports
+from settings import Settings
 from helpers.moderation_helpers import (
     load_banned_users,
     load_banned_ids,
@@ -195,9 +196,14 @@ ensure_file_exists(WHITELISTED_USERS_PATH, [])
 # Validate and clean configuration files
 ensure_json_valid(CONFIG_PATH, default_config)
 
+# Initialize Settings class with config path
+Settings.set_path(CONFIG_PATH)
+Settings.load()
+
+# Set theme from Settings
+set_current_theme(Settings.THEME)
+
 # Load configuration data from files
-with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
-    config = json.load(f)
 with open(BANNED_IDS_PATH, 'r', encoding="utf-8") as f:
     BANNED_IDS = json.load(f)
 with open(BANNED_USERS_PATH, "r", encoding="utf-8") as f:
@@ -208,31 +214,10 @@ with open(WHITELISTED_USERS_PATH, "r", encoding="utf-8") as f:
     WHITELISTED_USERS = json.load(f)
 
 # =============================================================================
-# CONFIGURATION VARIABLES
+# CONFIGURATION VARIABLES (deprecated - use Settings.field instead)
 # =============================================================================
-
-# Parse configuration values with defaults
-YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
-RATE_LIMIT_SECONDS = config.get('RATE_LIMIT_SECONDS', 3000)
-TOAST_NOTIFICATIONS = config.get('TOAST_NOTIFICATIONS', "True").lower() == "true"
-PREFIX = config.get('PREFIX', "!")
-QUEUE_COMMAND = config.get('QUEUE_COMMAND', "queue")
-VOLUME = config.get('VOLUME', 25)
-# Handle migration from DARK_MODE to THEME
-raw_theme = config.get("THEME") if "THEME" in config else None
-if raw_theme is None and "DARK_MODE" in config:
-    raw_theme = "dark_theme" if config.get("DARK_MODE", "True").lower() == "true" else "light_theme"
-if not isinstance(raw_theme, str) or not raw_theme:
-    raw_theme = "dark_theme"
-set_current_theme(raw_theme)
-ALLOW_URLS = config.get('ALLOW_URLS', "True").lower() == "true"
-REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
-REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
-MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
-ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
-ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
-AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
-AUTOBAN_USERS = config.get('AUTOBAN_USERS', "False").lower() == "true"
+# These are kept for backward compatibility during migration
+# Access settings via Settings.field (e.g., Settings.VOLUME, Settings.PREFIX)
 
 
 # User rate limiting - tracks last command time per user
@@ -250,7 +235,7 @@ def on_next_item(event) -> None:
     Args:
         event: VLC event object (unused but required by VLC callback signature)
     """
-    if AUTOREMOVE_SONGS:
+    if Settings.AUTOREMOVE_SONGS:
         try:
             # Always remove the first item (the one that just finished)
             if media_list.count() > 1:
@@ -270,7 +255,7 @@ player = instance.media_list_player_new()  # Create playlist player
 media_list = instance.media_list_new()     # Create empty playlist
 player.set_media_list(media_list)          # Assign playlist to player
 player.play()                              # Start the player
-player.get_media_player().audio_set_volume(VOLUME)  # Set initial volume
+player.get_media_player().audio_set_volume(Settings.VOLUME)  # Set initial volume
 
 # Set up event handling for automatic song removal
 event_manager = player.event_manager()
@@ -317,7 +302,7 @@ def run_installer_wrapper() -> None:
 def check_for_updates_wrapper() -> None:
     """Check for updates with current configuration."""
     global UPDATE_AVAILABLE, LATEST_RELEASE_DETAILS, LATEST_VERSION
-    latest_version = check_for_updates(CURRENT_VERSION, TOAST_NOTIFICATIONS)
+    latest_version = check_for_updates(CURRENT_VERSION, Settings.TOAST_NOTIFICATIONS)
     if latest_version:
         UPDATE_AVAILABLE = True
         LATEST_VERSION = latest_version
@@ -533,10 +518,10 @@ def initialize_chat() -> bool:
                         pass
         except (KeyError, AttributeError):
             pass
-        chat = pytchat.create(video_id=YOUTUBE_VIDEO_ID)
+        chat = pytchat.create(video_id=Settings.YOUTUBE_VIDEO_ID)
         return True
     except Exception as e:
-        logging.critical(f"Invalid YouTube Video ID '{YOUTUBE_VIDEO_ID}'")
+        logging.critical(f"Invalid YouTube Video ID '{Settings.YOUTUBE_VIDEO_ID}'")
         logging.critical(f"Error {traceback.format_exc()}")
         return False
 
@@ -547,35 +532,19 @@ def load_config() -> None:
     Reloads all configuration data from JSON files and updates global variables.
     This function is called when configuration changes are made through the GUI.
     """
-    global config, YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
-    global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
     global BANNED_IDS, BANNED_USERS, WHITELISTED_IDS, WHITELISTED_USERS
-    global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
-    global AUTOBAN_USERS
 
-    # Load all configuration files
-    with open(CONFIG_PATH, 'r', encoding="utf-8") as f:
-        config = json.load(f)
+    # Reload Settings from file
+    Settings.load()
+    
+    # Update theme if it changed
+    set_current_theme(Settings.THEME)
+    
+    # Load moderation lists
     BANNED_IDS = load_banned_ids(BANNED_IDS_PATH)
     BANNED_USERS = load_banned_users(BANNED_USERS_PATH)
     WHITELISTED_IDS = load_whitelisted_ids(WHITELISTED_IDS_PATH)
     WHITELISTED_USERS = load_whitelisted_users(WHITELISTED_USERS_PATH)
-
-    # Parse configuration values with defaults
-    YOUTUBE_VIDEO_ID = config.get("YOUTUBE_VIDEO_ID", "")
-    RATE_LIMIT_SECONDS = config.get("RATE_LIMIT_SECONDS", 10)
-    TOAST_NOTIFICATIONS = config.get("TOAST_NOTIFICATIONS", "True").lower() == "true"
-    PREFIX = config.get("PREFIX", "!")
-    QUEUE_COMMAND = config.get("QUEUE_COMMAND", "queue")
-    VOLUME = config.get("VOLUME", 25)
-    ALLOW_URLS = config.get("ALLOW_URLS", "True").lower() == "true"
-    REQUIRE_MEMBERSHIP = config.get('REQUIRE_MEMBERSHIP', "False").lower() == "true"
-    REQUIRE_SUPERCHAT = config.get('REQUIRE_SUPERCHAT', "False").lower() == "true"
-    MINIMUM_SUPERCHAT = config.get('MINIMUM_SUPERCHAT', 3)
-    ENFORCE_ID_WHITELIST = config.get('ENFORCE_ID_WHITELIST', "False").lower() == "true"
-    ENFORCE_USER_WHITELIST = config.get('ENFORCE_USER_WHITELIST', "False").lower() == "true"
-    AUTOREMOVE_SONGS = config.get('AUTOREMOVE_SONGS', "False").lower() == "true"
-    AUTOBAN_USERS = config.get('AUTOBAN_USERS', "False").lower() == "true"
 
 def quit_program() -> None:
     """
@@ -676,9 +645,8 @@ def on_volume_change(sender, app_data, user_data) -> None:
         app_data: New volume value (0.0 to 100.0)
         user_data: Additional user data (unused)
     """
-    global VOLUME
-    VOLUME = int(app_data)  # VLC expects volume 0–100
-    player.get_media_player().audio_set_volume(VOLUME)
+    Settings.VOLUME = int(app_data)  # VLC expects volume 0–100
+    player.get_media_player().audio_set_volume(Settings.VOLUME)
     save_config_to_file()
 
 # =============================================================================
@@ -693,7 +661,7 @@ def show_toast(video_id: str, username: str) -> None:
         video_id: YouTube video ID
         username: Username who requested the song
     """
-    if TOAST_NOTIFICATIONS:
+    if Settings.TOAST_NOTIFICATIONS:
         notification.notify(
             title="Requested by: " + username,
             message="Adding '" + get_video_name_fromID(video_id) + "' to queue",
@@ -750,11 +718,10 @@ def on_chat_message(chat_message) -> None:
         chat_message: Chat message object from pytchat
     """
     global BANNED_USERS, BANNED_IDS, WHITELISTED_IDS, WHITELISTED_USERS
-    global ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST
     message = chat_message.message
 
     # Only process messages that start with the command prefix
-    if message.startswith(f"{PREFIX}{QUEUE_COMMAND}"):
+    if message.startswith(f"{Settings.PREFIX}{Settings.QUEUE_COMMAND}"):
         try:
             # Extract user information
             username = chat_message.author.name
@@ -776,7 +743,7 @@ def on_chat_message(chat_message) -> None:
             video_id = parts[1]
 
             # Check rate limiting
-            if current_time - user_last_command[username] < RATE_LIMIT_SECONDS:
+            if current_time - user_last_command[username] < Settings.RATE_LIMIT_SECONDS:
                 return
 
             # Check if video is banned
@@ -784,7 +751,7 @@ def on_chat_message(chat_message) -> None:
                 
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is banned)")
 
-                if AUTOBAN_USERS:
+                if Settings.AUTOBAN_USERS:
                     BANNED_USERS.append({"id": channelid, "name": username})
                     save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
                     refresh_banned_users_list()
@@ -798,30 +765,30 @@ def on_chat_message(chat_message) -> None:
                 return
             
             # Check user whitelist if enforced
-            if (ENFORCE_USER_WHITELIST and not any(channelid == x["id"] for x in WHITELISTED_USERS)):
+            if (Settings.ENFORCE_USER_WHITELIST and not any(channelid == x["id"] for x in WHITELISTED_USERS)):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (user is not whitelisted)")
                 return
             
             # Check video whitelist if enforced
-            if (ENFORCE_ID_WHITELIST and not any(video_id == x["id"] for x in WHITELISTED_IDS)):
+            if (Settings.ENFORCE_ID_WHITELIST and not any(video_id == x["id"] for x in WHITELISTED_IDS)):
                 logging.info(f"Blocked user {username} ({channelid}) from queuing song '{get_video_name_fromID(video_id)}' (video is not whitelisted)")
                 return
             
             # Handle full YouTube URLs if allowed
             if 'watch?v=' in video_id:
-                if ALLOW_URLS:
+                if Settings.ALLOW_URLS:
                     video_id = video_id.split('watch?v=', 1)[1]
                 else:
                     logging.warning(f"user {username} attempted to queue a URL but URL queuing is disabled! (url: {video_id})")
                     return
                 
             # Check membership requirement
-            if REQUIRE_MEMBERSHIP and not userismember:
+            if Settings.REQUIRE_MEMBERSHIP and not userismember:
                 logging.warning(f"user {username} attempted to queue a song but they are not a member and 'REQUIRE_MEMBERSHIP' is enabled!")
                 return
 
             # Check superchat requirement
-            if REQUIRE_SUPERCHAT and (not issuperchat or superchatvalue < MINIMUM_SUPERCHAT):
+            if Settings.REQUIRE_SUPERCHAT and (not issuperchat or superchatvalue < Settings.MINIMUM_SUPERCHAT):
                 logging.warning(f"user {username} attempted to queue a song but their message was not a Superchat or had too low of a value!")
                 return
 
@@ -865,25 +832,9 @@ def update_now_playing() -> None:
 
 def save_config_to_file() -> None:
     """Save current configuration to config file."""
-    updated_config = {
-        "YOUTUBE_VIDEO_ID": YOUTUBE_VIDEO_ID,
-        "RATE_LIMIT_SECONDS": RATE_LIMIT_SECONDS,
-        "TOAST_NOTIFICATIONS": str(TOAST_NOTIFICATIONS),
-        "PREFIX": PREFIX,
-        "QUEUE_COMMAND": QUEUE_COMMAND,
-        "VOLUME": VOLUME,
-        "THEME": get_current_theme(),
-        "ALLOW_URLS": str(ALLOW_URLS),
-        "REQUIRE_MEMBERSHIP": str(REQUIRE_MEMBERSHIP),
-        "REQUIRE_SUPERCHAT": str(REQUIRE_SUPERCHAT),
-        "MINIMUM_SUPERCHAT": MINIMUM_SUPERCHAT,
-        "ENFORCE_ID_WHITELIST": str(ENFORCE_ID_WHITELIST),
-        "ENFORCE_USER_WHITELIST": str(ENFORCE_USER_WHITELIST),
-        "AUTOREMOVE_SONGS": str(AUTOREMOVE_SONGS),
-        "AUTOBAN_USERS": str(AUTOBAN_USERS)
-    }
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(updated_config, f, indent=4)
+    # Update theme in Settings before saving
+    Settings.THEME = get_current_theme()
+    Settings.save()
 
 def extract_id_from_listbox_item(item: str) -> str:
     """
@@ -1275,27 +1226,22 @@ def build_gui() -> None:
 
     def update_settings_from_menu() -> None:
         """Update configuration from GUI settings and save to file."""
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
-        global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT, MINIMUM_SUPERCHAT
-        global ENFORCE_USER_WHITELIST, ENFORCE_ID_WHITELIST, AUTOREMOVE_SONGS
-        global AUTOBAN_USERS
-        
-        # Update global variables from GUI inputs
-        RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
-        TOAST_NOTIFICATIONS = str(get_value("toast_checkbox"))
-        PREFIX = get_value("prefix_input")
-        QUEUE_COMMAND = get_value("queue_input")
-        ALLOW_URLS = get_value("allowURLs_checkbox")
-        REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
-        REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
-        MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
-        ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
-        ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
-        AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
-        AUTOBAN_USERS = get_value("autoban_users_checkbox")
+        # Update Settings from GUI inputs
+        Settings.RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
+        Settings.TOAST_NOTIFICATIONS = get_value("toast_checkbox")
+        Settings.PREFIX = get_value("prefix_input")
+        Settings.QUEUE_COMMAND = get_value("queue_input")
+        Settings.ALLOW_URLS = get_value("allowURLs_checkbox")
+        Settings.REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
+        Settings.REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
+        Settings.MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
+        Settings.ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
+        Settings.ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
+        Settings.AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
+        Settings.AUTOBAN_USERS = get_value("autoban_users_checkbox")
 
         # Save updated configuration to file
-        save_config_to_file()
+        Settings.save()
 
     # =============================================================================
     # MAIN WINDOW CONSTRUCTION
@@ -1413,7 +1359,7 @@ def build_gui() -> None:
         # =============================================================================
         
         add_text("Volume")
-        add_slider_float(label="", default_value=config["VOLUME"], min_value=0.0, max_value=100.0, 
+        add_slider_float(label="", default_value=Settings.VOLUME, min_value=0.0, max_value=100.0, 
                         width=400, callback=on_volume_change, format="%.0f", tag="volume_slider")
         
         with tooltip("volume_slider"):
@@ -1484,26 +1430,26 @@ def build_gui() -> None:
             add_separator()
 
             # Command configuration
-            add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
-            add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
-            add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
+            add_input_text(label="Command Prefix", default_value=Settings.PREFIX, tag="prefix_input")
+            add_input_text(label="Queue Command", default_value=Settings.QUEUE_COMMAND, tag="queue_input")
+            add_input_int(label="Rate Limit (seconds)", default_value=Settings.RATE_LIMIT_SECONDS, tag="rate_limit_input")
             
             # Notification settings
-            add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
+            add_checkbox(label="Enable Toast Notifications", default_value=Settings.TOAST_NOTIFICATIONS, tag="toast_checkbox")
             
             # Request permissions
-            add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
-            add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
-            add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
-            add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
+            add_checkbox(label="Allow URL Requests", default_value=Settings.ALLOW_URLS, tag="allowURLs_checkbox")
+            add_checkbox(label="Require Membership to request", default_value=Settings.REQUIRE_MEMBERSHIP, tag="require_membership_checkbox")
+            add_checkbox(label="Require Superchat to request", default_value=Settings.REQUIRE_SUPERCHAT, tag="require_superchat_checkbox")
+            add_input_int(label="Minimum Superchat cost (USD)", default_value=Settings.MINIMUM_SUPERCHAT, tag="minimum_superchat_input")
             
             # Whitelist enforcement
-            add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
-            add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
-            add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
+            add_checkbox(label="Enforce User Whitelist", default_value=Settings.ENFORCE_USER_WHITELIST, tag="enforce_user_whitelist_checkbox")
+            add_checkbox(label="Enforce Song Whitelist", default_value=Settings.ENFORCE_ID_WHITELIST, tag="enforce_id_whitelist_checkbox")
+            add_checkbox(label="Autoban users", default_value=Settings.AUTOBAN_USERS, tag="autoban_users_checkbox")
             
             # Queue management
-            add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
+            add_checkbox(label="Automatically remove songs", default_value=Settings.AUTOREMOVE_SONGS, tag="autoremove_songs_checkbox")
 
             add_spacer(height=10)
             add_button(label="Update Settings", callback=lambda: (update_settings_from_menu(), configure_item("SettingsWindow", show=False)))
@@ -1745,37 +1691,34 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
     
     def save_and_start_callback() -> None:
         """Save configuration and start the application."""
-        global YOUTUBE_VIDEO_ID, RATE_LIMIT_SECONDS, TOAST_NOTIFICATIONS, PREFIX, QUEUE_COMMAND
-        global ALLOW_URLS, VOLUME, REQUIRE_MEMBERSHIP, REQUIRE_SUPERCHAT
-        global MINIMUM_SUPERCHAT, ENFORCE_ID_WHITELIST, ENFORCE_USER_WHITELIST, AUTOREMOVE_SONGS
-        global AUTOBAN_USERS
 
-        # Update in-memory config from GUI values
-        YOUTUBE_VIDEO_ID = get_value("id_input")
-        RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
-        TOAST_NOTIFICATIONS = str(get_value("toast_checkbox")).lower() == "true"
-        PREFIX = get_value("prefix_input")
-        QUEUE_COMMAND = get_value("queue_input")
+        # Update Settings from GUI values
+        Settings.YOUTUBE_VIDEO_ID = get_value("id_input")
+        Settings.RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
+        Settings.TOAST_NOTIFICATIONS = get_value("toast_checkbox")
+        Settings.PREFIX = get_value("prefix_input")
+        Settings.QUEUE_COMMAND = get_value("queue_input")
         # Get selected theme
         selected_theme_display = get_value("theme_dropdown_config")
         if selected_theme_display:
             theme_name = get_theme_name_from_display(selected_theme_display)
             if theme_name and theme_name is not None:
+                Settings.THEME = theme_name
                 set_current_theme(theme_name)
             else:
                 logging.error(f"Failed to resolve theme name from display name {selected_theme_display!r}")
         
-        ALLOW_URLS = get_value("allowURLs_checkbox")
-        REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
-        MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
-        ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
-        ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
-        AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
-        REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
-        AUTOBAN_USERS = get_value("autoban_users_checkbox")
+        Settings.ALLOW_URLS = get_value("allowURLs_checkbox")
+        Settings.REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
+        Settings.MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
+        Settings.ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
+        Settings.ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
+        Settings.AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
+        Settings.REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
+        Settings.AUTOBAN_USERS = get_value("autoban_users_checkbox")
 
         # Save config to file
-        save_config_to_file()
+        Settings.save()
 
         apply_theme(get_current_theme())
         stop_dearpygui()
@@ -1783,7 +1726,7 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
     with window(label="Configure LYTE Settings", tag="ConfigWindow", width=0, height=0):
         set_primary_window("ConfigWindow", True)
 
-        add_input_text(label="YouTube Livestream ID", default_value=config["YOUTUBE_VIDEO_ID"], tag="id_input")
+        add_input_text(label="YouTube Livestream ID", default_value=Settings.YOUTUBE_VIDEO_ID, tag="id_input")
 
         if invalid_id:
             add_text("Invalid or inaccessible livestream ID", color=(255, 100, 100), tag="invalid_id_warning")
@@ -1791,18 +1734,18 @@ def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
         if not_live:
            add_text("Video is not a livestream", color=(255, 100, 100), tag="invalid_id_warning") 
 
-        add_input_text(label="Command Prefix", default_value=config["PREFIX"], tag="prefix_input")
-        add_input_text(label="Queue Command", default_value=config["QUEUE_COMMAND"], tag="queue_input")
-        add_input_int(label="Rate Limit (seconds)", default_value=config["RATE_LIMIT_SECONDS"], tag="rate_limit_input")
-        add_checkbox(label="Enable Toast Notifications", default_value=config["TOAST_NOTIFICATIONS"].lower() == "true", tag="toast_checkbox")
-        add_checkbox(label="Allow URL Requests", default_value=config["ALLOW_URLS"].lower() == "true", tag="allowURLs_checkbox")
-        add_checkbox(label="Require Membership to request", default_value=config["REQUIRE_MEMBERSHIP"].lower() == "true", tag="require_membership_checkbox")
-        add_checkbox(label="Require Superchat to request", default_value=config["REQUIRE_SUPERCHAT"].lower() == "true", tag="require_superchat_checkbox")
-        add_input_int(label="Minimum Superchat cost (USD)", default_value=config["MINIMUM_SUPERCHAT"], tag="minimum_superchat_input")
-        add_checkbox(label="Enforce User Whitelist", default_value=config["ENFORCE_USER_WHITELIST"].lower() == "true", tag="enforce_user_whitelist_checkbox")
-        add_checkbox(label="Enforce Song Whitelist", default_value=config["ENFORCE_ID_WHITELIST"].lower() == "true", tag="enforce_id_whitelist_checkbox")
-        add_checkbox(label="Automatically remove songs", default_value=config["AUTOREMOVE_SONGS"].lower() == "true", tag="autoremove_songs_checkbox")
-        add_checkbox(label="Autoban users", default_value=config["AUTOBAN_USERS"].lower() == "true", tag="autoban_users_checkbox")
+        add_input_text(label="Command Prefix", default_value=Settings.PREFIX, tag="prefix_input")
+        add_input_text(label="Queue Command", default_value=Settings.QUEUE_COMMAND, tag="queue_input")
+        add_input_int(label="Rate Limit (seconds)", default_value=Settings.RATE_LIMIT_SECONDS, tag="rate_limit_input")
+        add_checkbox(label="Enable Toast Notifications", default_value=Settings.TOAST_NOTIFICATIONS, tag="toast_checkbox")
+        add_checkbox(label="Allow URL Requests", default_value=Settings.ALLOW_URLS, tag="allowURLs_checkbox")
+        add_checkbox(label="Require Membership to request", default_value=Settings.REQUIRE_MEMBERSHIP, tag="require_membership_checkbox")
+        add_checkbox(label="Require Superchat to request", default_value=Settings.REQUIRE_SUPERCHAT, tag="require_superchat_checkbox")
+        add_input_int(label="Minimum Superchat cost (USD)", default_value=Settings.MINIMUM_SUPERCHAT, tag="minimum_superchat_input")
+        add_checkbox(label="Enforce User Whitelist", default_value=Settings.ENFORCE_USER_WHITELIST, tag="enforce_user_whitelist_checkbox")
+        add_checkbox(label="Enforce Song Whitelist", default_value=Settings.ENFORCE_ID_WHITELIST, tag="enforce_id_whitelist_checkbox")
+        add_checkbox(label="Automatically remove songs", default_value=Settings.AUTOREMOVE_SONGS, tag="autoremove_songs_checkbox")
+        add_checkbox(label="Autoban users", default_value=Settings.AUTOBAN_USERS, tag="autoban_users_checkbox")
 
 
         # Theme selection dropdown
@@ -2002,11 +1945,11 @@ while not should_exit:
     not_live = False
     invalid_id = False
     load_config()
-    # Ensure we're using the latest video ID from config
-    current_video_id = YOUTUBE_VIDEO_ID
+    # Ensure we're using the latest video ID from Settings
+    current_video_id = Settings.YOUTUBE_VIDEO_ID
     if initialize_chat():
         # Double-check we're still validating the same video ID
-        if current_video_id == YOUTUBE_VIDEO_ID and is_youtube_live(YOUTUBE_VIDEO_ID):
+        if current_video_id == Settings.YOUTUBE_VIDEO_ID and is_youtube_live(Settings.YOUTUBE_VIDEO_ID):
             break
         logging.warning("Video is not a Live. Reloading config window.")
         show_config_menu(not_live = True)
