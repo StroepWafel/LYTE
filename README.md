@@ -4,6 +4,13 @@ Live YouTube Entertainment (LYTE) is a program that allows viewers of a live str
 
 Documentation is also available at [https://stroepwafel.au/LYTE/documentation](https://stroepwafel.au/LYTE/documentation)
 
+# Licensing
+LYTE is licensed under the AGPL-3.0.
+
+If you want to use LYTE in a commercial, proprietary, or hosted product without releasing your source code, a commercial license is available.
+
+Contact: contact@stroepwafel.au
+
 # Donating
 If you make money from the use of or find this program helpful and interesting, you can support me on [GitHub Sponsors](https://github.com/sponsors/StroepWafel). Your support is completely optional, but it helps me keep building tools like this — and maybe one day, turn it into my full-time job!
 
