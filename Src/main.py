@@ -286,7 +286,7 @@ def on_next_item(event) -> None:
             logging.error(f"Error removing finished song: {e}")
 
 # Initialize VLC media player components
-instance = vlc.Instance("--one-instance")  # Prevent multiple VLC instances
+instance = vlc.Instance(["--one-instance", "--intf", "dummy", "--no-plugins-cache"]) # Prevent multiple VLC instances
 player = instance.media_list_player_new()  # Create playlist player
 media_list = instance.media_list_new()     # Create empty playlist
 player.set_media_list(media_list)          # Assign playlist to player
