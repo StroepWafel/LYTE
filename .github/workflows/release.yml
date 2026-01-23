@@ -86,7 +86,7 @@ jobs:
         with:
           groq_api_key: ${{ secrets.GROQ_API_KEY }}
           tag_name: ${{ github.event.inputs.release_version }}-${{ github.event.inputs.release_channel }}
-          release_name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }}"
+          release_name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
           draft: ${{ steps.flags.outputs.draft }}
           prerelease: ${{ steps.flags.outputs.prerelease }}
           files: dist/LYTE.exe
