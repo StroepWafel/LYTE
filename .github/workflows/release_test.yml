@@ -1,4 +1,4 @@
-name: Release Workflow
+name: Release Workflow (nocreate Release)
 
 on:
   workflow_dispatch:
@@ -53,7 +53,6 @@ jobs:
               }
           } | Set-Content $file
 
-
       - name: Run PyInstaller
         run: |
           python -m PyInstaller --clean --log-level=DEBUG main.spec
@@ -63,42 +62,3 @@ jobs:
         with:
           name: LYTE_Build
           path: dist/LYTE.exe
-      - name: Set release flags
-        id: flags
-        run: |
-          $channel = "${{ github.event.inputs.release_channel }}"
-          if ($channel -eq "Release") {
-            "prerelease=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            "draft=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          } elseif ($channel -eq "Alpha" -or $channel -eq "Beta") {
-            "prerelease=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            "draft=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          } else {
-            # Dev release
-            "prerelease=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            "draft=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          }
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.event.inputs.release_version }}-${{ github.event.inputs.release_channel }}
-          name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
-          body: |
-            ## What's New:
-            ### Features:
-            - 
-            ### Under The Hood:
-            - 
-            ## Bugs Squashed:
-            - 
-            
-            ## Other Notes:
-            - 
-            
-            ## New Contributors:
-            - 
-          files: dist/LYTE.exe
-          draft: ${{ steps.flags.outputs.draft }}
-          prerelease: ${{ steps.flags.outputs.prerelease }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
