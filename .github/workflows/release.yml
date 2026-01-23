@@ -42,6 +42,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary -r Src/requirements.txt
 
+      - name: Update version in Python file
+        run: |
+          $file = "Src/main.py"
+          (Get-Content $file) | ForEach-Object {
+              if ($_ -match '^CURRENT_VERSION =') {
+                  'CURRENT_VERSION = "' + '${{ github.event.inputs.release_version }}' + '"'
+              } else {
+                  $_
+              }
+          } | Set-Content $file
+
+
       - name: Run PyInstaller
         run: |
           python -m PyInstaller --clean --log-level=DEBUG main.spec
