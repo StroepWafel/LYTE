@@ -63,6 +63,29 @@ jobs:
         with:
           name: LYTE_Build
           path: dist/LYTE.exe
+          
+      - name: Get previous release tag
+        id: prev_release
+        run: |
+          $json = Invoke-RestMethod -Uri "https://api.github.com/repos/StroepWafel/LYTE/releases?per_page=1" -Headers @{
+            "Authorization" = "Bearer $env:GITHUB_TOKEN"
+            "Accept" = "application/vnd.github+json"
+          }
+          if ($json.Length -gt 0) {
+            $prev_tag = $json[0].tag_name
+          } else {
+            $prev_tag = ""
+          }
+          "PREV_TAG=$prev_tag" | Out-File -FilePath $env:GITHUB_ENV
+
+      - name: Generate AI Release Notes
+        id: ai_notes
+        uses: github/ai-github-release-notes@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          previous_tag: ${{ env.PREV_TAG }}
+          tag: ${{ github.event.inputs.release_version }}-${{ github.event.inputs.release_channel }}
+          
       - name: Set release flags
         id: flags
         run: |
