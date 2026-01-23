@@ -9,3 +9,4 @@ LICENCE
 README.md
 Src/config.json
 Src/themes/demo_theme.json
+*.json
