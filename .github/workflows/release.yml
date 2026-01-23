@@ -82,7 +82,7 @@ jobs:
           
       - name: Generate and Create Release
         id: release
-        uses: YOUR_USERNAME/ai-release-notes@v1.0.0
+        uses: stroepwafel/ai-release-notes@v1.0.0
         with:
           groq_api_key: ${{ secrets.GROQ_API_KEY }}
           tag_name: ${{ github.event.inputs.release_version }}-${{ github.event.inputs.release_channel }}
