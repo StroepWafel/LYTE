@@ -5,7 +5,7 @@
 
 # ==============================================================================
 # Application version
-CURRENT_VERSION = "1.10.0"
+CURRENT_VERSION = "1.9.0"
 # ==============================================================================
 
 # Standard Library Imports
@@ -160,6 +160,7 @@ QUEUE_HISTORY: list[dict] = []  # [{"user_id": "UCxxxx", "username": "Name", "so
 UPDATE_AVAILABLE: bool = False
 LATEST_RELEASE_DETAILS: dict = {}
 LATEST_VERSION: str = ""
+IGNORED_VERSION: str = ""
 
 # Track user-initiated skips
 user_initiated_skip = False
@@ -186,7 +187,8 @@ default_config = {
     "ENFORCE_USER_WHITELIST": "False",        # Only allow whitelisted users
     "AUTOREMOVE_SONGS": "True",               # Auto-remove finished songs from queue
     "AUTOBAN_USERS": "False",                 # Auto-ban users who request banned videos
-    "SONG_FINISH_NOTIFICATIONS": "False"      # Notify when songs finish naturally (not skipped)
+    "SONG_FINISH_NOTIFICATIONS": "False",     # Notify when songs finish naturally (not skipped)
+    "IGNORED_VERSION": ""                     # Version to ignore when checking for updates  
 }
 
 # =============================================================================
@@ -337,8 +339,10 @@ def run_installer_wrapper() -> None:
 
 def check_for_updates_wrapper() -> None:
     """Check for updates with current configuration."""
-    global UPDATE_AVAILABLE, LATEST_RELEASE_DETAILS, LATEST_VERSION
-    latest_version = check_for_updates(CURRENT_VERSION, Settings.TOAST_NOTIFICATIONS)
+    global UPDATE_AVAILABLE, LATEST_RELEASE_DETAILS, LATEST_VERSION, IGNORED_VERSION
+    Settings.load()
+    IGNORED_VERSION = Settings.IGNORED_VERSION
+    latest_version = check_for_updates(CURRENT_VERSION, IGNORED_VERSION, Settings.TOAST_NOTIFICATIONS)
     if latest_version:
         UPDATE_AVAILABLE = True
         LATEST_VERSION = latest_version
@@ -957,10 +961,9 @@ def show_download_ui(latest_version: str) -> None:
 
 def ignore_update_action() -> None:
     """Ignore the current update and hide related UI."""
-    global UPDATE_AVAILABLE, LATEST_VERSION
+    global UPDATE_AVAILABLE, IGNORED_VERSION, LATEST_VERSION
     try:
         UPDATE_AVAILABLE = False
-        LATEST_VERSION = ""
         if does_item_exist("update_details_menu"):
             configure_item("update_details_menu", enabled=False)
         # Hide download UI elements if present
@@ -973,6 +976,9 @@ def ignore_update_action() -> None:
         # Close details window if open
         if does_item_exist("UpdateDetailsWindow"):
             configure_item("UpdateDetailsWindow", show=False)
+        IGNORED_VERSION = LATEST_VERSION
+        Settings.IGNORED_VERSION = IGNORED_VERSION
+        save_config_to_file()
     except Exception as e:
         logging.error(f"Error ignoring update: {e}")
 
@@ -1841,7 +1847,7 @@ def build_gui() -> None:
                 set_current_theme(list(themes.keys())[0])
             else:
                 set_current_theme("dark_theme")
-        create_viewport(title='LYTE Control Panel', width=1330, height=550)
+        create_viewport(title='LYTE Control Panel', width=1330, height=750)
         apply_theme(get_current_theme())
         setup_dearpygui()
         show_viewport()

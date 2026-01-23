@@ -31,6 +31,7 @@ class Settings:
     AUTOREMOVE_SONGS: bool = True
     AUTOBAN_USERS: bool = False
     SONG_FINISH_NOTIFICATIONS: bool = False
+    IGNORED_VERSION: str = ""
     
     @classmethod
     def set_path(cls, path: str) -> None:
@@ -101,6 +102,7 @@ class Settings:
                         "AUTOREMOVE_SONGS": str(cls.AUTOREMOVE_SONGS),
                         "AUTOBAN_USERS": str(cls.AUTOBAN_USERS),
                         "SONG_FINISH_NOTIFICATIONS": str(cls.SONG_FINISH_NOTIFICATIONS),
+                        "IGNORED_VERSION": cls.IGNORED_VERSION,
                     },
                     f,
                     indent=4
@@ -126,5 +128,6 @@ class Settings:
             "AUTOREMOVE_SONGS": str(cls.AUTOREMOVE_SONGS),
             "AUTOBAN_USERS": str(cls.AUTOBAN_USERS),
             "SONG_FINISH_NOTIFICATIONS": str(cls.SONG_FINISH_NOTIFICATIONS),
+            "IGNORED_VERSION": cls.IGNORED_VERSION,
         }
 

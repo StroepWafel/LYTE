@@ -69,7 +69,7 @@ def download_installer_worker(app_folder: str) -> None:
     except Exception as e:
         logging.error(f"Error downloading installer: {e}")
 
-def check_for_updates(current_version: str, toast_notifications: bool) -> str:
+def check_for_updates(current_version: str, ignored_version: str, toast_notifications: bool) -> str:
     """
     Check for available updates and notify the user if a new version is available.
     
@@ -85,20 +85,24 @@ def check_for_updates(current_version: str, toast_notifications: bool) -> str:
         if not latest_version:
             return ""
             
-        if compare_versions(current_version, latest_version) < 0:
-            logging.info(f"Update available! Current: {current_version}, Latest: {latest_version}")
-            logging.info("To view changelog and available options, navigate to 'Help -> View update Details...'")
-            
-            # Show desktop notification if enabled
-            if toast_notifications:
-                from plyer import notification
-                notification.notify(
-                    title="LYTE Update Available",
-                    message=f"Version {latest_version} is now available! Current version: {current_version}",
-                    timeout=10
-                )
-            
-            return latest_version
+        if (compare_versions(current_version, latest_version) < 0):
+            if (compare_versions(ignored_version, latest_version) < 0):
+                logging.info(f"Update available! Current: {current_version}, Latest: {latest_version}")
+                logging.info("To view changelog and available options, navigate to 'Help -> View update Details...'")
+                
+                # Show desktop notification if enabled
+                if toast_notifications:
+                    from plyer import notification
+                    notification.notify(
+                        title="LYTE Update Available",
+                        message=f"Version {latest_version} is now available! Current version: {current_version}",
+                        timeout=10
+                    )
+                
+                return latest_version
+            else:
+                logging.info(f"An update for LYTE is available but is ignored (version {current_version})")
+                return ""
         else:
             logging.info(f"LYTE is up to date (version {current_version})")
             return ""
