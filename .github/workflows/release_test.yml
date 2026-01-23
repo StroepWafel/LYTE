@@ -1,0 +1,53 @@
+name: Release Workflow (nocreate Release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_channel:
+        description: 'Type of release'
+        required: true
+        type: choice
+        options:
+        - Alpha
+        - Beta
+        - Dev
+        - Release
+      release_version:
+        description: 'Version of release (e.g. 1.0.3), make sure to use semver (https://semver.org/) and PLEASE double check that the program has the same version'
+        required: true
+        type: string
+      release_summary:
+        description: 'Quick summary of release to append to title'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary -r Src/requirements.txt
+
+      - name: Run PyInstaller
+        run: |
+          python -m PyInstaller --clean --log-level=DEBUG main.spec
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LYTE_Build
+          path: dist/LYTE.exe
