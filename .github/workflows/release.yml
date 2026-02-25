@@ -16,13 +16,26 @@ on:
         description: 'Version of release (e.g. 1.0.3), make sure to use semver (https://semver.org/) and PLEASE double check that the program has the same version'
         required: true
         type: string
+      release_summary:
+        description: 'Quick summary of release to append to title'
+        required: true
+        type: string
       from_tag:
         description: 'Previous tag to compare from (e.g., 1.0.2-Release). Leave empty to auto-detect'
         required: false
         type: string
-      release_summary:
-        description: 'Quick summary of release to append to title'
-        required: true
+      detail_level:
+        description: 'Release notes depth: brief, standard, or detailed'
+        required: false
+        default: 'standard'
+        type: choice
+        options:
+          - brief
+          - standard
+          - detailed
+      compatibility:
+        description: 'e.g. Windows 10+, Python 3.12'
+        required: false
         type: string
 
 permissions:
@@ -96,6 +109,8 @@ jobs:
           release_name: "[${{ github.event.inputs.release_channel }}] v${{ github.event.inputs.release_version }} - ${{ github.event.inputs.release_summary }}"
           draft: ${{ steps.flags.outputs.draft }}
           prerelease: ${{ steps.flags.outputs.prerelease }}
+          detail_level: ${{ github.event.inputs.detail_level || 'standard' }}
+          compatibility: ${{ github.event.inputs.compatibility }}
           files: dist/LYTE.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
