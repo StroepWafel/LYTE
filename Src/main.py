@@ -385,14 +385,14 @@ def reload_themes() -> None:
 class ThemeFileHandler(FileSystemEventHandler):
     """
     File system event handler for theme files.
-    
-    Automatically reloads themes when theme files are created, modified, or deleted.
+    Emits request_theme_reload so reload runs on GUI thread (thread-safe).
     """
-    def __init__(self):
+    def __init__(self, bridge):
         super().__init__()
+        self.bridge = bridge
         self.last_reload_time = 0
         self.reload_debounce_seconds = 0.5  # Debounce rapid file changes
-    
+
     def on_any_event(self, event):
         """
         Handle any file system event in the themes folder.
@@ -414,16 +414,11 @@ class ThemeFileHandler(FileSystemEventHandler):
         if current_time - self.last_reload_time < self.reload_debounce_seconds:
             return
         
-        # Reload themes when files are created, modified, or deleted
+        # Request theme reload on GUI thread (avoids Qt cross-thread errors)
         if event.event_type in ('created', 'modified', 'deleted'):
             self.last_reload_time = current_time
-            try:
-                logging.info(f"Theme file change detected ({event.event_type}): {os.path.basename(event.src_path)}")
-                reload_themes()
-                logging.info("Themes reloaded automatically")
-            except Exception as e:
-                logging.error(f"Error reloading themes after file change: {e}")
-                logging.error(traceback.format_exc())
+            if self.bridge:
+                self.bridge.request_theme_reload.emit()
 
 # Global observer instance for theme file watching
 theme_observer = None
@@ -439,9 +434,13 @@ def start_theme_file_watcher() -> None:
     if not os.path.exists(THEMES_FOLDER):
         logging.warning(f"Themes folder does not exist: {THEMES_FOLDER}")
         return
-    
+
+    if not GUI_BRIDGE:
+        logging.warning("GUI_BRIDGE not set; theme file watcher cannot reload themes")
+        return
+
     try:
-        event_handler = ThemeFileHandler()
+        event_handler = ThemeFileHandler(GUI_BRIDGE)
         theme_observer = Observer()
         theme_observer.schedule(event_handler, THEMES_FOLDER, recursive=False)
         theme_observer.start()

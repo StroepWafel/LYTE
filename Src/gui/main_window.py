@@ -13,22 +13,17 @@ from PySide6.QtCore import Qt
 
 
 class GuiLogger(logging.Handler):
-    """Logging handler that appends to the console widget."""
+    """Logging handler that appends to the console via signal (thread-safe)."""
 
-    def __init__(self, console_widget):
+    def __init__(self, bridge):
         super().__init__()
-        self.console = console_widget
+        self.bridge = bridge
 
     def emit(self, record):
         try:
             msg = self.format(record)
-            if self.console:
-                cur = self.console.toPlainText()
-                lines = cur.splitlines()
-                lines.append(msg)
-                if len(lines) > 100:
-                    lines = lines[-100:]
-                self.console.setPlainText("\n".join(lines))
+            if self.bridge:
+                self.bridge.set_console_text.emit(msg)
         except Exception:
             pass
 
@@ -115,8 +110,8 @@ class MainWindow(QMainWindow):
         self.console.setToolTip("Log messages and application status")
         layout.addWidget(self.console)
 
-        # Set up GUI logger
-        gui_handler = GuiLogger(self.console)
+        # Set up GUI logger (uses signal for thread-safe updates)
+        gui_handler = GuiLogger(bridge)
         gui_handler.setLevel(logging.INFO)
         gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logging.getLogger().addHandler(gui_handler)
@@ -128,6 +123,8 @@ class MainWindow(QMainWindow):
         bridge.refresh_list.connect(self._on_refresh_list)
         bridge.show_download_ui.connect(self._on_show_download_ui)
         bridge.hide_update_ui.connect(self._on_hide_update_ui)
+        bridge.set_console_text.connect(self._on_append_console)
+        bridge.request_theme_reload.connect(self._on_request_theme_reload)
 
     def _on_prev(self):
         self.main.set_user_initiated_skip()
@@ -173,6 +170,21 @@ class MainWindow(QMainWindow):
 
     def _on_hide_update_ui(self):
         self.update_label.hide()
+
+    def _on_append_console(self, msg: str):
+        """Thread-safe: append log line to console (slot runs on GUI thread)."""
+        cur = self.console.toPlainText()
+        lines = cur.splitlines()
+        lines.append(msg)
+        if len(lines) > 100:
+            lines = lines[-100:]
+        self.console.setPlainText("\n".join(lines))
+
+    def _on_request_theme_reload(self):
+        """Theme file changed; reload themes on GUI thread."""
+        logging.info("Theme file change detected, reloading...")
+        self.main.reload_themes()
+        logging.info("Themes reloaded automatically")
 
     def _create_menu(self):
         menubar = self.menuBar()

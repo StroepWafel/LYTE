@@ -11,9 +11,62 @@ Save the theme file in the themes folder:
 
 ## How Themes Work
 
-LYTE uses a **PySide6 (Qt)**-based interface. Theme colors and styles from your JSON file are converted to Qt stylesheets (QSS) and applied to the application. The JSON structure has not changed—all color names, style properties, and values remain compatible. Themes are applied when you select them from the View → Theme menu, and they hot-reload when you edit theme files while LYTE is running.
+LYTE uses a **PySide6 (Qt)**-based interface with two theme formats:
 
-## Basic Structure
+1. **JSON themes** — Colors and styles are converted to Qt stylesheets (QSS). Use the structured format below.
+2. **QSS themes** — Raw Qt Style Sheet (CSS-like) files for full control. See [Custom QSS Themes](#custom-qss-themes) below.
+
+Themes are applied when you select them from the View → Theme menu and hot-reload when you edit theme files while LYTE is running.
+
+## Custom QSS Themes
+
+You can create themes using raw **Qt Style Sheets (QSS)**, which use CSS-like syntax. This gives you full control over every widget's appearance.
+
+### Creating a QSS Theme
+
+1. Copy `custom_theme.qss.example` from the themes folder to a new file (e.g., `ocean.qss`, `midnight.qss`).
+2. Edit the file with your colors, borders, and styles.
+3. Save in the themes folder. The theme appears in View → Theme.
+4. Use **View → Reload themes** to pick up new or edited QSS files.
+
+### QSS Syntax
+
+QSS is similar to CSS. Use selectors like `QPushButton`, `QLineEdit`, and pseudo-states like `:hover`, `:pressed`, `:disabled`:
+
+```css
+QPushButton {
+    background-color: #3c463c;
+    color: #dcdcdc;
+    border-radius: 8px;
+    padding: 8px 16px;
+}
+QPushButton:hover {
+    background-color: #507850;
+}
+```
+
+### Widget Selectors
+
+| Selector | Description |
+| --- | --- |
+| `QWidget`, `QMainWindow`, `QDialog` | Base backgrounds |
+| `QPushButton`, `:hover`, `:pressed`, `:disabled` | Buttons |
+| `QLineEdit`, `QPlainTextEdit`, `QSpinBox`, `QComboBox` | Inputs |
+| `QSlider::groove:horizontal`, `QSlider::handle:horizontal` | Sliders |
+| `QMenuBar`, `QMenu`, `QMenu::item:selected` | Menus |
+| `QListWidget`, `QListWidget::item:selected` | Lists |
+| `QCheckBox`, `QCheckBox::indicator` | Checkboxes |
+| `QScrollBar:vertical`, `QScrollBar::handle:vertical` | Scrollbars |
+| `QGroupBox`, `QToolTip` | Groups and tooltips |
+
+### File Naming for QSS
+
+- `my_theme.qss` → theme appears as "My Theme"
+- Filename (without `.qss`) becomes the theme identifier
+- Template: `custom_theme.qss.example` (copy and rename to use)
+- **Showcase:** `aurora_theme.qss` is included as a dramatic example—select "Aurora Theme" from View → Theme to see gradients, rounded corners, and a full purple/cyan palette
+
+## Basic Structure (JSON Themes)
 
 A theme file is a JSON file with the following structure:
 

@@ -1,0 +1,256 @@
+/* =============================================================================
+   LYTE Aurora Theme - Showcase Example
+   =============================================================================
+   A dramatic dark theme with deep purples, electric cyan accents, and soft
+   magenta highlights. Demonstrates what's possible with custom QSS themes:
+   - Full color palette control
+   - Rounded corners and pill-shaped elements
+   - Custom borders and spacing
+   - Distinct hover/active/pressed states
+   - Font styling
+   ============================================================================= */
+
+QWidget {
+    background-color: #0f0a1a;
+    color: #e8e0f0;
+    font-family: "Segoe UI", "SF Pro Display", sans-serif;
+}
+
+QMainWindow, QDialog {
+    background-color: #0f0a1a;
+}
+
+QMenuBar {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #1a1225, stop:1 #0f0a1a);
+    color: #e8e0f0;
+    padding: 6px 0;
+    border-bottom: 2px solid #2d1b4e;
+}
+
+QMenuBar::item {
+    padding: 6px 14px;
+    border-radius: 6px;
+}
+
+QMenuBar::item:selected {
+    background-color: rgba(0, 212, 170, 0.25);
+    color: #00ffcc;
+    border: 1px solid rgba(0, 212, 170, 0.5);
+}
+
+QMenu {
+    background-color: #1a1225;
+    color: #e8e0f0;
+    border: 1px solid #2d1b4e;
+    border-radius: 12px;
+    padding: 8px;
+}
+
+QMenu::item {
+    padding: 10px 24px;
+    border-radius: 8px;
+}
+
+QMenu::item:selected {
+    background-color: rgba(199, 125, 255, 0.3);
+    color: #e8e0f0;
+}
+
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #2d1b4e, stop:1 #1a1225);
+    color: #e8e0f0;
+    border: 2px solid #3d2a5e;
+    border-radius: 12px;
+    padding: 10px 20px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(0, 212, 170, 0.4), stop:1 rgba(0, 212, 170, 0.15));
+    border: 2px solid #00d4aa;
+    color: #00ffcc;
+}
+
+QPushButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(199, 125, 255, 0.5), stop:1 rgba(199, 125, 255, 0.2));
+    border: 2px solid #c77dff;
+}
+
+QPushButton:disabled {
+    background-color: #1a1225;
+    color: #5a4a6a;
+    border: 1px solid #2d1b4e;
+}
+
+QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QComboBox {
+    background-color: #1a1225;
+    color: #e8e0f0;
+    border: 2px solid #2d1b4e;
+    border-radius: 10px;
+    padding: 8px 12px;
+    selection-background-color: rgba(0, 212, 170, 0.4);
+}
+
+QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {
+    border: 2px solid #00d4aa;
+}
+
+QComboBox {
+    min-width: 120px;
+}
+
+QComboBox::drop-down {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #2d1b4e, stop:1 #1a1225);
+    border-left: 2px solid #2d1b4e;
+    border-radius: 0 8px 8px 0;
+    width: 24px;
+}
+
+QComboBox:hover::drop-down {
+    background: rgba(0, 212, 170, 0.2);
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1a1225;
+    color: #e8e0f0;
+    border: 2px solid #2d1b4e;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+QSlider::groove:horizontal {
+    background: #1a1225;
+    height: 10px;
+    border-radius: 5px;
+    border: 1px solid #2d1b4e;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #00d4aa, stop:1 #00997a);
+    width: 22px;
+    margin: -6px 0;
+    border-radius: 11px;
+    border: 2px solid #00ffcc;
+}
+
+QSlider::handle:horizontal:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #00ffcc, stop:1 #00d4aa);
+}
+
+QSlider::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba(0, 212, 170, 0.5), stop:1 #00d4aa);
+    border-radius: 5px;
+}
+
+QScrollBar:vertical {
+    background: #1a1225;
+    width: 14px;
+    border-radius: 7px;
+    border: 1px solid #2d1b4e;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #2d1b4e, stop:1 #3d2a5e);
+    border-radius: 7px;
+    min-height: 40px;
+    border: 1px solid #3d2a5e;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba(0, 212, 170, 0.4), stop:1 rgba(0, 212, 170, 0.2));
+    border: 1px solid #00d4aa;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QListWidget {
+    background-color: #1a1225;
+    color: #e8e0f0;
+    border: 2px solid #2d1b4e;
+    border-radius: 12px;
+    padding: 4px;
+}
+
+QListWidget::item {
+    padding: 10px 12px;
+    border-radius: 8px;
+}
+
+QListWidget::item:selected {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(0, 212, 170, 0.35), stop:1 rgba(0, 212, 170, 0.15));
+    color: #00ffcc;
+    border: 1px solid rgba(0, 212, 170, 0.5);
+}
+
+QListWidget::item:hover {
+    background-color: rgba(199, 125, 255, 0.15);
+}
+
+QCheckBox {
+    color: #e8e0f0;
+    spacing: 10px;
+}
+
+QCheckBox::indicator {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid #2d1b4e;
+    background-color: #1a1225;
+}
+
+QCheckBox::indicator:hover {
+    border: 2px solid #00d4aa;
+    background-color: rgba(0, 212, 170, 0.1);
+}
+
+QCheckBox::indicator:checked {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #00d4aa, stop:1 #00997a);
+    border: 2px solid #00ffcc;
+}
+
+QGroupBox {
+    color: #e8e0f0;
+    border: 2px solid #2d1b4e;
+    border-radius: 12px;
+    margin-top: 16px;
+    padding: 16px 12px 12px 12px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 4px 12px;
+    background-color: #1a1225;
+    border-radius: 6px;
+    border: 1px solid #00d4aa;
+    color: #00ffcc;
+    font-weight: 600;
+}
+
+QToolTip {
+    background-color: #1a1225;
+    color: #e8e0f0;
+    border: 2px solid #00d4aa;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+QLabel {
+    color: #e8e0f0;
+}

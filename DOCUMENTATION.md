@@ -933,15 +933,15 @@ init_theme_system("path/to/themes")
 ```
 
 #### `discover_themes() -> dict`
-Scan the themes folder and discover all available theme files. Checks both PyInstaller bundle location and user app folder.
+Scan the themes folder and discover all available theme files. Supports both `.json` (converted to QSS) and `.qss` (raw Qt stylesheet) files. Checks both PyInstaller bundle location and user app folder.
 
-**Returns:** Dictionary mapping theme names to theme info
+**Returns:** Dictionary mapping theme names to theme info (each entry includes `theme_type`: `"json"` or `"qss"`)
 
 ```python
 themes = discover_themes()
 ```
 
-#### `load_theme_from_file(theme_name: str) -> dict`
+#### `load_theme_from_file(theme_name: str) -> dict | None`
 Load theme configuration from a JSON file. Checks user folder first, then PyInstaller bundle location.
 
 **Parameters:**
@@ -951,6 +951,26 @@ Load theme configuration from a JSON file. Checks user folder first, then PyInst
 
 ```python
 theme_data = load_theme_from_file("dark_theme")
+```
+
+#### `load_qss_from_file(theme_name: str) -> str | None`
+Load a raw QSS (Qt stylesheet) theme from file. Used when `theme_type` is `"qss"`.
+
+**Parameters:**
+- `theme_name`: Name of the theme file (without .qss extension)
+
+**Returns:** Raw QSS content, or None if not found
+
+```python
+qss = load_qss_from_file("my_custom")
+```
+
+#### `get_theme_type(theme_name: str) -> str`
+Return `"json"` or `"qss"` for the given theme. Defaults to `"json"` if unknown.
+
+```python
+theme_type = get_theme_type("dark_theme")  # "json"
+theme_type = get_theme_type("ocean")        # "qss" if ocean.qss exists
 ```
 
 #### `create_default_theme_files() -> None`
@@ -1252,9 +1272,13 @@ show_folder(app_folder)
 
 ### How to Create a Custom Theme
 
-Themes use a JSON structure with `colors` and `styles` keys. They hot-reload when you edit theme files while LYTE is running. For new themes, use **View → Reload themes** (no restart needed).
+**Option A: JSON themes** — Use a JSON structure with `colors` and `styles` keys.
 
-**Full color and style reference:** See [docs/theme-documentation.md](docs/theme-documentation.md).
+**Option B: QSS themes** — Use raw Qt stylesheets for full control. Copy `custom_theme.qss.example` to `yourname.qss`, edit, and select from View → Theme.
+
+Themes hot-reload when you edit theme files while LYTE is running. Use **View → Reload themes** for new themes (no restart needed).
+
+**Full reference:** See [docs/theme-documentation.md](docs/theme-documentation.md) for JSON structure and QSS syntax.
 
 1. Create a JSON file in the themes folder (e.g., `custom_theme.json`)
 2. Use the following structure:
