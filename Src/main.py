@@ -27,7 +27,7 @@ import pytchat  # YouTube live chat integration
 import requests  # HTTP requests
 from plyer import notification  # Desktop notifications
 import vlc  # Media player (python-vlc)
-from dearpygui.dearpygui import *  # GUI framework
+# GUI: PySide6 via gui module
 from watchdog.observers import Observer  # File system monitoring
 from watchdog.events import FileSystemEventHandler  # File system event handling
 # Currency conversion is handled by helpers.currency_helpers
@@ -164,6 +164,10 @@ IGNORED_VERSION: str = ""
 
 # Track user-initiated skips
 user_initiated_skip = False
+
+# GUI bridge and main window ref (set by gui.app when GUI starts)
+GUI_BRIDGE = None
+GUI_MAIN_WINDOW_REF = []
 
 
 # =============================================================================
@@ -353,10 +357,8 @@ def check_for_updates_wrapper() -> None:
 
         # If the GUI exists, surface UI immediately
         try:
-            if does_item_exist("MainWindow"):
+            if GUI_BRIDGE:
                 show_download_ui(latest_version)
-            if does_item_exist("update_details_menu"):
-                configure_item("update_details_menu", enabled=True)
         except Exception:
             pass
 
@@ -367,77 +369,14 @@ THEME_MENU_TAG = "theme_menu_root"
 THEME_MENU_EMPTY_TAG = "theme_menu_empty"
 
 def rebuild_theme_menu_items() -> None:
-    """
-    Regenerate the Theme menu items based on the currently available themes.
-    """
-    parent_tag = THEME_MENU_TAG
-    if not does_item_exist(parent_tag):
-        logging.warning("Theme menu not found; cannot rebuild theme entries")
-        return
-
-    # Remove existing theme menu items we manage (by parent/child relationship)
-    try:
-        children = get_item_children(parent_tag, 1) or []
-        for child_tag in list(children):
-            try:
-                if isinstance(child_tag, str) and (
-                    child_tag.startswith("theme_menu_") or child_tag == THEME_MENU_EMPTY_TAG
-                ):
-                    delete_item(child_tag)
-            except Exception as e:
-                logging.error(f"Error removing theme menu item {child_tag}: {e}")
-    except Exception as e:
-        logging.error(f"Error while cleaning theme menu items: {e}")
-
-    # Rebuild menu entries from available themes
-    theme_items = get_theme_dropdown_items()
-    if theme_items:
-        for display_name in theme_items:
-            if not display_name:
-                logging.warning("Skipping empty display name in theme menu")
-                continue
-            theme_name = get_theme_name_from_display(display_name)
-            if not theme_name:
-                logging.warning(f"Skipping theme menu entry for display name {display_name!r} - got None theme name")
-                continue
-            is_current = theme_name == get_current_theme()
-
-            # Ensure any stale item with this tag is removed before creating a new one
-            menu_tag = f"theme_menu_{theme_name}"
-            try:
-                if does_item_exist(menu_tag):
-                    delete_item(menu_tag)
-            except Exception as e:
-                logging.error(f"Error deleting existing theme menu item {menu_tag}: {e}")
-
-            def make_theme_callback(tn):
-                def callback(sender, app_data, user_data):
-                    logging.debug(f"Theme menu callback triggered for theme: {tn!r}")
-                    select_theme_by_name(tn)
-                return callback
-
-            add_menu_item(
-                label=display_name,
-                callback=make_theme_callback(theme_name),
-                check=is_current,
-                tag=menu_tag,
-                parent=parent_tag,
-            )
-    else:
-        # Clean up any previous "empty" marker before recreating it
-        try:
-            if does_item_exist(THEME_MENU_EMPTY_TAG):
-                delete_item(THEME_MENU_EMPTY_TAG)
-        except Exception as e:
-            logging.error(f"Error deleting existing empty theme menu item {THEME_MENU_EMPTY_TAG}: {e}")
-        add_menu_item(label="No themes available", enabled=False, tag=THEME_MENU_EMPTY_TAG, parent=parent_tag)
+    """No-op for PySide6 - theme menu is built once in main window."""
+    pass
 
 def reload_themes() -> None:
     """Reload all themes from disk."""
     unload_all_themes()
     load_all_themes()
     apply_theme(get_current_theme())
-    rebuild_theme_menu_items()
 
 # =============================================================================
 # THEME FILE WATCHER
@@ -461,11 +400,13 @@ class ThemeFileHandler(FileSystemEventHandler):
         Args:
             event: File system event object
         """
-        # Only process events for JSON files (theme files)
+        # Only process events for JSON and QSS theme files
         if event.is_directory:
             return
         
-        if not event.src_path.endswith('.json'):
+        if not (event.src_path.endswith('.json') or event.src_path.endswith('.qss')):
+            return
+        if event.src_path.endswith('.json.demo') or event.src_path.endswith('.qss.example'):
             return
         
         # Debounce rapid changes (e.g., when saving a file triggers multiple events)
@@ -613,8 +554,14 @@ def quit_program() -> None:
     except Exception as e:
         logging.error(f"Error releasing VLC resources: {e}")
 
-    # Close GUI
-    stop_dearpygui()
+    # Close GUI (PySide6)
+    try:
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            app.quit()
+    except Exception:
+        pass
     logging.info("GUI closed")
 
 # =============================================================================
@@ -754,9 +701,8 @@ def queue_song(video_id: str, requester: str, requesterUUID: str) -> None:
         # Show notification
         show_toast(video_id, requester)
         
-        # Refresh queue history window if it exists
-        if does_item_exist("queue_history_list"):
-            refresh_queue_history_list()
+        # Refresh queue history window if open
+        refresh_queue_history_list()
 
     except Exception as e:
         logging.warning(f"Error queuing song {youtube_url}: {e}")
@@ -870,8 +816,7 @@ def on_chat_message(chat_message) -> None:
 def update_now_playing() -> None:
     """
     Update the 'Now Playing' display in the GUI.
-    
-    Fetches the current media title and updates the GUI text element.
+    Uses GUI_BRIDGE when available (PySide6).
     """
     media = player.get_media_player().get_media()
     if media:
@@ -880,9 +825,11 @@ def update_now_playing() -> None:
         if not name:
             youtube_url = media.get_mrl()
             name = get_video_title(youtube_url)
-        set_value(now_playing_text, f"Now Playing: {name}")
+        text = f"Now Playing: {name}"
     else:
-        set_value(now_playing_text, "Now Playing: Nothing")
+        text = "Now Playing: Nothing"
+    if GUI_BRIDGE:
+        GUI_BRIDGE.update_now_playing.emit(text)
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -937,64 +884,25 @@ def is_youtube_live(video_id):
     return False
 
 def show_download_ui(latest_version: str) -> None:
-    """
-    Show download UI elements in the main window.
-    
-    Args:
-        latest_version: The latest version available
-    """
-    try:
-        # Add update notification text
-        if not does_item_exist("update_notification"):
-            add_text(f"Update Available: v{latest_version} (Current: v{CURRENT_VERSION})", 
-                    color=(255, 200, 100), tag="update_notification", parent="MainWindow")
-        
-        # Add download status text
-        if not does_item_exist("download_status"):
-            add_text("", tag="download_status", parent="MainWindow")
-        
-        # Note: Progress bar moved to Update Details window
-            
-    except Exception as e:
-        logging.error(f"Error showing download UI: {e}")
+    """Show download UI elements in the main window."""
+    if GUI_BRIDGE:
+        GUI_BRIDGE.show_download_ui.emit(latest_version)
 
 
 def ignore_update_action() -> None:
     """Ignore the current update and hide related UI."""
     global UPDATE_AVAILABLE, IGNORED_VERSION, LATEST_VERSION
-    try:
-        UPDATE_AVAILABLE = False
-        if does_item_exist("update_details_menu"):
-            configure_item("update_details_menu", enabled=False)
-        # Hide download UI elements if present
-        for tag in ("update_notification", "download_button", "download_status"):
-            if does_item_exist(tag):
-                try:
-                    configure_item(tag, show=False)
-                except Exception:
-                    pass
-        # Close details window if open
-        if does_item_exist("UpdateDetailsWindow"):
-            configure_item("UpdateDetailsWindow", show=False)
-        IGNORED_VERSION = LATEST_VERSION
-        Settings.IGNORED_VERSION = IGNORED_VERSION
-        save_config_to_file()
-    except Exception as e:
-        logging.error(f"Error ignoring update: {e}")
+    UPDATE_AVAILABLE = False
+    IGNORED_VERSION = LATEST_VERSION
+    Settings.IGNORED_VERSION = IGNORED_VERSION
+    save_config_to_file()
+    if GUI_BRIDGE:
+        GUI_BRIDGE.hide_update_ui.emit()
 
 
 def show_update_details_window() -> None:
-    """Populate and display the Update Details window."""
-    try:
-        name = LATEST_RELEASE_DETAILS.get("name", "Latest Release")
-        version = LATEST_RELEASE_DETAILS.get("version", LATEST_VERSION or "")
-        body = LATEST_RELEASE_DETAILS.get("body", "")
-        set_value("update_release_title", f"Release: {name}")
-        set_value("update_release_version", f"Version: v{version}" if version else "")
-        set_value("update_release_body", body)
-        configure_item("UpdateDetailsWindow", show=True)
-    except Exception as e:
-        logging.error(f"Error showing update details window: {e}")
+    """Populate and display the Update Details window (handled by main window menu)."""
+    pass
 
 
 # =============================================================================
@@ -1003,197 +911,66 @@ def show_update_details_window() -> None:
 
 def refresh_banned_users_list() -> None:
     """Update the banned users list in the GUI."""
-    configure_item("banned_users_list",
-                   items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS])
+    if GUI_BRIDGE:
+        GUI_BRIDGE.refresh_list.emit("banned_users_list", [f"{u['name']} ({u['id']})" for u in BANNED_USERS])
 
 def refresh_banned_ids_list() -> None:
     """Update the banned video IDs list in the GUI."""
-    configure_item("banned_ids_list",
-                   items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS])
+    if GUI_BRIDGE:
+        GUI_BRIDGE.refresh_list.emit("banned_ids_list", [f"{u['name']} ({u['id']})" for u in BANNED_IDS])
     
 def refresh_whitelisted_users_list() -> None:
     """Update the whitelisted users list in the GUI."""
-    configure_item("whitelisted_users_list",
-                   items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS])
+    if GUI_BRIDGE:
+        GUI_BRIDGE.refresh_list.emit("whitelisted_users_list", [f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS])
 
 def refresh_whitelisted_ids_list() -> None:
     """Update the whitelisted video IDs list in the GUI."""
-    configure_item("whitelisted_ids_list",
-                   items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS])
+    if GUI_BRIDGE:
+        GUI_BRIDGE.refresh_list.emit("whitelisted_ids_list", [f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS])
 
 def refresh_queue_history_list() -> None:
     """Update the queue history list in the GUI."""
-    if does_item_exist("queue_history_list"):
-        # Display in format: "Song Title - Requested by Username (User ID) [Song ID]"
-        items = [f"{item['song_title']} - Requested by {item['username']} ({item['user_id']}) [{item['song_id']}]" 
-                 for item in QUEUE_HISTORY]
-        configure_item("queue_history_list", items=items)
+    items = [f"{item['song_title']} - Requested by {item['username']} ({item['user_id']}) [{item['song_id']}]"
+             for item in QUEUE_HISTORY]
+    if GUI_BRIDGE:
+        GUI_BRIDGE.refresh_list.emit("queue_history_list", items)
 
 # =============================================================================
 # BAN/UNBAN CALLBACK FUNCTIONS
 # =============================================================================
 
-def _add_item_with_async_name_fetch(
-    item_id: str,
-    item_list: list,
-    input_tag: str,
-    save_func,
-    refresh_func,
-    fetch_name_func,
-    item_type: str
-) -> None:
-    """
-    Helper function to add an item to a list with placeholder name,
-    then fetch the real name in a background thread.
-    
-    Args:
-        item_id: ID of the item to add
-        item_list: List to add the item to (will be modified)
-        input_tag: GUI input tag to clear after adding
-        save_func: Function to save the list to file
-        refresh_func: Function to refresh the GUI list
-        fetch_name_func: Function to fetch the real name (takes item_id)
-        item_type: Type of item for error messages (e.g., "user", "video")
-    """
-    if item_id and all(u["id"] != item_id for u in item_list):
-        # Add immediately with placeholder
-        item_list.append({"id": item_id, "name": "Loading..."})
-        save_func(item_list)
-        refresh_func()
-        set_value(input_tag, "")  # clear input
-
-        # Fetch real name in background
-        def fetch_and_update():
-            try:
-                real_name = fetch_name_func(item_id)
-                # Update the entry in the list
-                for u in item_list:
-                    if u["id"] == item_id:
-                        u["name"] = real_name
-                        break
-                save_func(item_list)
-                # Update the listbox in the GUI thread
-                refresh_func()
-            except Exception as e:
-                logging.error(f"Error fetching {item_type} name for {item_id}: {e}")
-
-        threading.Thread(target=fetch_and_update, daemon=True).start()
-
 def ban_user_callback() -> None:
-    """
-    Handle banning a user from the GUI.
-    
-    Adds user to banned list immediately with placeholder name,
-    then fetches real channel name in background thread.
-    """
-    global BANNED_USERS
-    user_to_ban = get_value("ban_user_input").strip()
-    _add_item_with_async_name_fetch(
-        user_to_ban,
-        BANNED_USERS,
-        "ban_user_input",
-        lambda lst: save_banned_users(lst, BANNED_USERS_PATH),
-        refresh_banned_users_list,
-        fetch_channel_name,
-        "channel"
-    )
+    """Legacy DPG callback - use gui.moderation_windows.BannedUsersWindow."""
+    pass
 
 def ban_id_callback() -> None:
-    """
-    Handle banning a video ID from the GUI.
-    
-    Adds video to banned list immediately with placeholder name,
-    then fetches real video name in background thread.
-    """
-    global BANNED_IDS
-    id_to_ban = get_value("ban_id_input").strip()
-    _add_item_with_async_name_fetch(
-        id_to_ban,
-        BANNED_IDS,
-        "ban_id_input",
-        lambda lst: save_banned_ids(lst, BANNED_IDS_PATH),
-        refresh_banned_ids_list,
-        get_video_name_fromID,
-        "video"
-    )
+    """Legacy DPG callback - use gui.moderation_windows.BannedVideosWindow."""
+    pass
 
 def whitelist_user_callback() -> None:
-    """
-    Handle whitelisting a user from the GUI.
-    
-    Adds user to whitelisted list immediately with placeholder name,
-    then fetches real channel name in background thread.
-    """
-    global WHITELISTED_USERS
-    user_to_whitelist = get_value("whitelist_user_input").strip()
-    _add_item_with_async_name_fetch(
-        user_to_whitelist,
-        WHITELISTED_USERS,
-        "whitelist_user_input",
-        lambda lst: save_whitelisted_users(lst, WHITELISTED_USERS_PATH),
-        refresh_whitelisted_users_list,
-        fetch_channel_name,
-        "channel"
-    )
+    """Legacy DPG callback - use gui.moderation_windows.WhitelistedUsersWindow."""
+    pass
 
 def whitelist_id_callback() -> None:
-    """
-    Handle whitelisting a video ID from the GUI.
-    
-    Adds video to whitelisted list immediately with placeholder name,
-    then fetches real video name in background thread.
-    """
-    global WHITELISTED_IDS
-    id_to_whitelist = get_value("whitelist_id_input").strip()
-    _add_item_with_async_name_fetch(
-        id_to_whitelist,
-        WHITELISTED_IDS,
-        "whitelist_id_input",
-        lambda lst: save_whitelisted_ids(lst, WHITELISTED_IDS_PATH),
-        refresh_whitelisted_ids_list,
-        get_video_name_fromID,
-        "video"
-    )
+    """Legacy DPG callback - use gui.moderation_windows.WhitelistedVideosWindow."""
+    pass
 
 def unban_user_callback() -> None:
-    """Remove selected user from banned users list."""
-    global BANNED_USERS
-    selected = get_value("banned_users_list")
-    if selected:
-        selected_id = extract_id_from_listbox_item(selected)
-        BANNED_USERS = [u for u in BANNED_USERS if u["id"] != selected_id]
-        save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
-        refresh_banned_users_list()
+    """Legacy DPG callback - use gui.moderation_windows.BannedUsersWindow."""
+    pass
 
 def unban_id_callback() -> None:
-    """Remove selected video ID from banned video IDs list."""
-    global BANNED_IDS
-    selected = get_value("banned_ids_list")
-    if selected:
-        selected_id = extract_id_from_listbox_item(selected)
-        BANNED_IDS = [u for u in BANNED_IDS if u["id"] != selected_id]
-        save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
-        refresh_banned_ids_list()
+    """Legacy DPG callback - use gui.moderation_windows.BannedVideosWindow."""
+    pass
 
 def unwhitelist_user_callback() -> None:
-    """Remove selected user from whitelisted users list."""
-    global WHITELISTED_USERS
-    selected = get_value("whitelisted_users_list")
-    if selected:
-        selected_id = extract_id_from_listbox_item(selected)
-        WHITELISTED_USERS = [u for u in WHITELISTED_USERS if u["id"] != selected_id]
-        save_whitelisted_users(WHITELISTED_USERS, WHITELISTED_USERS_PATH)
-        refresh_whitelisted_users_list()
+    """Legacy DPG callback - use gui.moderation_windows.WhitelistedUsersWindow."""
+    pass
 
 def unwhitelist_id_callback() -> None:
-    """Remove selected video ID from whitelisted video IDs list."""
-    global WHITELISTED_IDS
-    selected = get_value("whitelisted_ids_list")
-    if selected:
-        selected_id = extract_id_from_listbox_item(selected)
-        WHITELISTED_IDS = [u for u in WHITELISTED_IDS if u["id"] != selected_id]
-        save_whitelisted_ids(WHITELISTED_IDS, WHITELISTED_IDS_PATH)
-        refresh_whitelisted_ids_list()
+    """Legacy DPG callback - use gui.moderation_windows.WhitelistedVideosWindow."""
+    pass
 
 def extract_queue_item_info(item: str) -> dict:
     """
@@ -1245,40 +1022,12 @@ def extract_queue_item_info(item: str) -> dict:
         return None
 
 def ban_song_from_queue() -> None:
-    """Ban the song from the selected queue history entry."""
-    global BANNED_IDS
-    selected = get_value("queue_history_list")
-    if selected:
-        info = extract_queue_item_info(selected)
-        if info and info["song_id"]:
-            song_id = info["song_id"]
-            song_title = info["song_title"]
-            # Check if already banned
-            if not any(song_id == x["id"] for x in BANNED_IDS):
-                BANNED_IDS.append({"id": song_id, "name": song_title})
-                save_banned_ids(BANNED_IDS, BANNED_IDS_PATH)
-                refresh_banned_ids_list()
-                logging.info(f"Banned song '{song_title}' ({song_id}) from queue history")
-            else:
-                logging.info(f"Song '{song_title}' ({song_id}) is already banned")
+    """Legacy DPG callback - use gui.moderation_windows.QueueHistoryWindow."""
+    pass
 
 def ban_user_from_queue() -> None:
-    """Ban the user from the selected queue history entry."""
-    global BANNED_USERS
-    selected = get_value("queue_history_list")
-    if selected:
-        info = extract_queue_item_info(selected)
-        if info and info["user_id"]:
-            user_id = info["user_id"]
-            username = info["username"]
-            # Check if already banned
-            if not any(user_id == x["id"] for x in BANNED_USERS):
-                BANNED_USERS.append({"id": user_id, "name": username})
-                save_banned_users(BANNED_USERS, BANNED_USERS_PATH)
-                refresh_banned_users_list()
-                logging.info(f"Banned user '{username}' ({user_id}) from queue history")
-            else:
-                logging.info(f"User '{username}' ({user_id}) is already banned")
+    """Legacy DPG callback - use gui.moderation_windows.QueueHistoryWindow."""
+    pass
 # =============================================================================
 # GUI INITIALIZATION & THEMES
 # =============================================================================
@@ -1318,9 +1067,6 @@ def select_theme_by_name(theme_name: str) -> None:
     set_current_theme(theme_name)
     apply_theme(theme_name)
     
-    # Update menu checkmarks
-    update_theme_menu_checks()
-    
     # Save theme preference to config
     save_theme_to_config()
 
@@ -1340,16 +1086,8 @@ def select_theme(sender, app_data, user_data) -> None:
     select_theme_by_name(theme_name)
 
 def update_theme_menu_checks() -> None:
-    """Update checkmarks on theme menu items."""
-    themes = get_available_themes()
-    if not themes:
-        return
-    
-    current = get_current_theme()
-    for theme_name in themes.keys():
-        menu_tag = f"theme_menu_{theme_name}"
-        if does_item_exist(menu_tag):
-            configure_item(menu_tag, check=(theme_name == current))
+    """Update checkmarks on theme menu items (no-op for PySide6 - main window handles it)."""
+    pass
 
 def save_theme_to_config() -> None:
     """Save current theme to config file."""
@@ -1361,668 +1099,6 @@ def open_url(url: str) -> None:
         webbrowser.open(url)
     except Exception:
         pass
-# =============================================================================
-# GUI CONSTRUCTION FUNCTIONS
-# =============================================================================
-
-def build_gui() -> None:
-
-    
-    """
-    Build and display the main application GUI.
-    
-    Creates the main control panel window with all controls for managing
-    the music queue, settings, and user/video management.
-    """
-    create_context()
-    global now_playing_text
-
-    def update_settings_from_menu() -> None:
-        """Update configuration from GUI settings and save to file."""
-        # Update Settings from GUI inputs
-        Settings.RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
-        Settings.TOAST_NOTIFICATIONS = get_value("toast_checkbox")
-        Settings.PREFIX = get_value("prefix_input")
-        Settings.QUEUE_COMMAND = get_value("queue_input")
-        Settings.ALLOW_URLS = get_value("allowURLs_checkbox")
-        Settings.REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
-        Settings.REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
-        Settings.MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
-        Settings.ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
-        Settings.ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
-        Settings.AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
-        Settings.AUTOBAN_USERS = get_value("autoban_users_checkbox")
-        Settings.SONG_FINISH_NOTIFICATIONS = get_value("song_finish_notifications_checkbox")
-
-        # Save updated configuration to file
-        Settings.save()
-
-    # =============================================================================
-    # MAIN WINDOW CONSTRUCTION
-    # =============================================================================
-    
-    with window(label="LYTE Control Panel", tag="MainWindow", width=700, height=380, pos=(100, 100)):
-        set_primary_window("MainWindow", True)
-
-        add_spacer(height=15)
-
-        with menu_bar() as _:
-            with menu(label="File"):
-                add_menu_item(label="Reload Config", callback=load_config, tag="reload_config_menu")
-                add_menu_item(label="Settings", tag="settings_menu",
-                            callback=lambda: (load_config(), configure_item("SettingsWindow", show=True)))
-                add_menu_item(label="Quit", callback=lambda: quit_program(), tag="quit_menu")
-                
-                with tooltip("reload_config_menu"):
-                    add_text("Reload configuration from file")
-                with tooltip("settings_menu"):
-                    add_text("Manage general settings")
-                with tooltip("quit_menu"):
-                    add_text("Exit the application")
-                    
-            with menu(label="View"):
-                with menu(label="Theme", tag=THEME_MENU_TAG):
-                    rebuild_theme_menu_items()
-                add_menu_item(label="Open Themes Folder", callback=lambda: show_folder(THEMES_FOLDER), tag="open_themes_folder_menu")
-                add_menu_item(label="Reload themes", callback=lambda: reload_themes(), tag="reload_themes")
-
-                with tooltip("open_themes_folder_menu"):
-                    add_text("Open the folder where themes are stored")
-                with tooltip("reload_themes"):
-                    add_text("Reload themes from the themes folder")
-
-
-            with menu(label="Moderation"):
-                add_menu_item(label="View Queue History", tag="queue_history_menu",
-                            callback=lambda: (refresh_queue_history_list(), configure_item("QueueHistoryWindow", show=True)))
-                add_menu_item(label="Manage Banned Users", tag="banned_users_menu",
-                            callback=lambda: (load_banned_users_wrapper(), refresh_banned_users_list(), configure_item("BannedUsersWindow", show=True)))
-                add_menu_item(label="Manage Banned Videos", tag="banned_videos_menu",
-                            callback=lambda: (load_banned_ids_wrapper(), refresh_banned_ids_list(), configure_item("BannedIDsWindow", show=True)))
-                add_menu_item(label="Manage Whitelisted Users", tag="whitelist_users_menu",
-                            callback=lambda: (load_whitelisted_users_wrapper(), refresh_whitelisted_users_list(), configure_item("WhitelistedUsersWindow", show=True)))
-                add_menu_item(label="Manage Whitelisted Videos", tag="whitelist_videos_menu",
-                            callback=lambda: (load_whitelisted_ids_wrapper(), refresh_whitelisted_ids_list(), configure_item("WhitelistedIDsWindow", show=True)))
-                
-                
-                with tooltip("banned_users_menu"):
-                    add_text("Manage users who are not allowed to request songs")
-                with tooltip("banned_videos_menu"):
-                    add_text("Manage videos that are not allowed to be requested")
-                with tooltip("whitelist_users_menu"):
-                    add_text("Manage users who are allowed to request songs when whitelist is enforced")
-                with tooltip("whitelist_videos_menu"):
-                    add_text("Manage videos that are allowed to be requested when whitelist is enforced")
-                with tooltip("queue_history_menu"):
-                    add_text("View past queued songs and ban songs or users")
-
-
-            with menu(label="Help"):
-                add_menu_item(label=f"Version: {CURRENT_VERSION}", enabled=False, tag="version_menu")
-                add_separator()
-                add_menu_item(label="Check for Updates", callback=check_for_updates_wrapper, tag="check_updates_menu")
-                add_menu_item(label="View Update Details...", callback=lambda: show_update_details_window(), tag="update_details_menu", enabled=False)
-                add_menu_item(label="Open GitHub Issues", callback=lambda: open_url("https://github.com/StroepWafel/LYTE/issues"), tag="github_issues_menu")
-                add_menu_item(label="Open General Documentation", callback=lambda: open_url("https://www.stroepwafel.au/LYTE/documentation"), tag="general_docs_menu")
-                add_menu_item(label="Open Theme Documentation", callback=lambda: open_url("https://www.stroepwafel.au/LYTE/documentation/theme-documentation"), tag="theme_docs_menu")
-                
-                with tooltip("version_menu"):
-                    add_text("Current version of LYTE")
-                with tooltip("check_updates_menu"):
-                    add_text("Check if a newer version is available")
-                with tooltip("update_details_menu"):
-                    add_text("View the latest release notes and actions")
-                with tooltip("github_issues_menu"):
-                    add_text("Open the GitHub issues page in your browser")
-                with tooltip("general_docs_menu"):
-                    add_text("Open the general documentation in your browser")
-                with tooltip("theme_docs_menu"):
-                    add_text("Open the theme documentation in your browser")
-                    
-        # =============================================================================
-        # NOW PLAYING DISPLAY
-        # =============================================================================
-        
-        now_playing_text = add_text("Now Playing: Nothing", wrap=600)
-        add_separator()
-        add_spacer(height=15)
-
-        # =============================================================================
-        # PLAYBACK CONTROLS
-        # =============================================================================
-        
-        with group(horizontal=True):
-            add_button(label="Play / Pause", callback=lambda: player.pause(), width=130, tag="play_button")
-            add_spacer(width=10)
-            add_button(label="Previous", callback=lambda: [set_user_initiated_skip(), player.previous(), update_now_playing()], width=110, tag="prev_button")
-            add_spacer(width=10)
-            add_button(label="Next", callback=lambda: [set_user_initiated_skip(), player.next(), update_now_playing()], width=110, tag="next_button")
-            add_spacer(width=10)
-            add_button(label="Refresh", callback=update_now_playing, width=110, tag="refresh_button")
-
-            # Tooltips for playback controls
-            with tooltip("play_button"):
-                add_text("Play/Pause the current song")
-            with tooltip("prev_button"):
-                add_text("Skip to the previous song")
-            with tooltip("next_button"):
-                add_text("Skip to the next song")
-            with tooltip("refresh_button"):
-                add_text("Refresh the song info")
-
-        add_spacer(height=5)
-
-        # =============================================================================
-        # VOLUME CONTROL
-        # =============================================================================
-        
-        add_text("Volume")
-        add_slider_float(label="", default_value=Settings.VOLUME, min_value=0.0, max_value=100.0, 
-                        width=400, callback=on_volume_change, format="%.0f", tag="volume_slider")
-        
-        with tooltip("volume_slider"):
-            add_text("Adjust the playback volume")
-
-        add_spacer(height=5)
-
-        # =============================================================================
-        # SONG PROGRESS CONTROL
-        # =============================================================================
-        
-        add_text("Song Progress")
-        with group(horizontal=True):
-            add_slider_float(tag=song_slider_tag, default_value=0.0, min_value=0.0, max_value=1.0,
-                            width=400, callback=on_song_slider_change, format="")
-            add_text("00:00 / 00:00", tag="song_time_text")
-            
-        with tooltip(song_slider_tag):
-            add_text("Drag to seek to a different position in the song")
-        with tooltip("song_time_text"):
-            add_text("Current position / Total duration")
-
-        # =============================================================================
-        # CONSOLE OUTPUT
-        # =============================================================================
-        
-        add_input_text(label="", tag="console_text", multiline=True, readonly=True, height=200, width=1300)
-        
-        with tooltip("console_text"):
-            add_text("Log messages and application status")
-        
-        # =============================================================================
-        # GUI LOGGER CLASS
-        # =============================================================================
-        
-        class GuiLogger(logging.Handler):
-            """
-            Custom logging handler that displays log messages in the GUI console.
-            
-            Keeps only the last 100 log lines to prevent memory issues.
-            """
-            def emit(self, record):
-                try:
-                    msg = self.format(record)
-                    if does_item_exist("console_text"):
-                        current_text = get_value("console_text")
-                        # Keep last 100 lines max
-                        lines = current_text.splitlines()
-                        lines.append(msg)
-                        if len(lines) > 100:
-                            lines = lines[-100:]
-                        set_value("console_text", "\n".join(lines))
-                except Exception:
-                    pass
-
-        # Set up GUI logging
-        gui_handler = GuiLogger()
-        gui_handler.setLevel(logging.INFO)
-        gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-        logging.getLogger().addHandler(gui_handler)
-
-        # =============================================================================
-        # SETTINGS WINDOW
-        # =============================================================================
-
-        with window(label="Settings", tag="SettingsWindow", show=False, width=750, height=410):
-            add_text("Settings")
-            add_separator()
-
-            # Command configuration
-            add_input_text(label="Command Prefix", default_value=Settings.PREFIX, tag="prefix_input")
-            add_input_text(label="Queue Command", default_value=Settings.QUEUE_COMMAND, tag="queue_input")
-            add_input_int(label="Rate Limit (seconds)", default_value=Settings.RATE_LIMIT_SECONDS, tag="rate_limit_input")
-            
-            # Notification settings
-            add_checkbox(label="Enable Toast Notifications", default_value=Settings.TOAST_NOTIFICATIONS, tag="toast_checkbox")
-            add_checkbox(label="Notify When New Song Starts", default_value=Settings.SONG_FINISH_NOTIFICATIONS, tag="song_finish_notifications_checkbox")
-            
-            # Request permissions
-            add_checkbox(label="Allow URL Requests", default_value=Settings.ALLOW_URLS, tag="allowURLs_checkbox")
-            add_checkbox(label="Require Membership to request", default_value=Settings.REQUIRE_MEMBERSHIP, tag="require_membership_checkbox")
-            add_checkbox(label="Require Superchat to request", default_value=Settings.REQUIRE_SUPERCHAT, tag="require_superchat_checkbox")
-            add_input_int(label="Minimum Superchat cost (USD)", default_value=Settings.MINIMUM_SUPERCHAT, tag="minimum_superchat_input")
-            
-            # Whitelist enforcement
-            add_checkbox(label="Enforce User Whitelist", default_value=Settings.ENFORCE_USER_WHITELIST, tag="enforce_user_whitelist_checkbox")
-            add_checkbox(label="Enforce Song Whitelist", default_value=Settings.ENFORCE_ID_WHITELIST, tag="enforce_id_whitelist_checkbox")
-            add_checkbox(label="Autoban users", default_value=Settings.AUTOBAN_USERS, tag="autoban_users_checkbox")
-            
-            # Queue management
-            add_checkbox(label="Automatically remove songs", default_value=Settings.AUTOREMOVE_SONGS, tag="autoremove_songs_checkbox")
-
-            add_spacer(height=10)
-            add_button(label="Update Settings", callback=lambda: (update_settings_from_menu(), configure_item("SettingsWindow", show=False)))
-
-            # =============================================================================
-            # SETTINGS TOOLTIPS
-            # =============================================================================
-            
-            with tooltip("prefix_input"):
-                add_text("The prefix before a command, useful if you already have another chatbot")
-                add_text("Can be any number of alphanumerical characters")
-            with tooltip("queue_input"):
-                add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces")
-            with tooltip("rate_limit_input"):
-                add_text("How long a user has to wait before they can queue another song, in seconds")
-            with tooltip("toast_checkbox"):
-                add_text("Whether or not to show desktop notifications when a song is queued")
-            with tooltip("allowURLs_checkbox"):
-                add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
-            with tooltip("require_membership_checkbox"):
-                add_text("Whether or not users need to be a member of the channel to request a song")
-            with tooltip("require_superchat_checkbox"):
-                add_text("Whether or not users need to send a superchat to request a song")
-            with tooltip("minimum_superchat_input"):
-                add_text("The minimum value superchat (in USD) that a user must spend to request a song")
-                add_text("Supplementary to 'Require Superchat to request'")
-            with tooltip("enforce_user_whitelist_checkbox"):
-                add_text("Whether or not to enforce the user Whitelist")
-            with tooltip("enforce_id_whitelist_checkbox"):
-                add_text("Whether or not to enforce the song ID Whitelist")
-            with tooltip("autoremove_songs_checkbox"):
-                add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
-            with tooltip("song_finish_notifications_checkbox"):
-                add_text("Whether or not to show desktop notifications when a new song starts playing (only when songs finish naturally, not when skipped)")
-            with tooltip("autoban_users_checkbox"):
-                add_text("Whether or not to automatically ban users who try to request banned songs")
-
-        # =============================================================================
-        # BANNED USERS MANAGEMENT WINDOW
-        # =============================================================================
-        
-        with window(label="Banned Users", tag="BannedUsersWindow", show=False, width=400, height=400):
-            add_text("Manage Banned Users")
-            add_separator()
-
-            # Display banned users list
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_USERS], 
-                    tag="banned_users_list", width=350, num_items=8)
-            add_spacer(height=10)
-
-            # Add new banned user
-            add_input_text(label="Add User ID", tag="ban_user_input", width=250)
-            add_button(label="Ban User", callback=lambda: ban_user_callback(), tag="ban_user_button")
-
-            add_spacer(height=10)
-
-            # Remove selected user
-            add_button(label="Unban Selected", callback=lambda: unban_user_callback(), tag="unban_user_button")
-            
-            with tooltip("ban_user_input"):
-                add_text("Enter the YouTube user ID to ban")
-            with tooltip("ban_user_button"):
-                add_text("Add the user to the banned list")
-            with tooltip("unban_user_button"):
-                add_text("Remove the selected user from the banned list")
-
-            add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("BannedUsersWindow", show=False))
-
-
-        # =============================================================================
-        # UPDATE DETAILS WINDOW
-        # =============================================================================
-        with window(label="Update Details", tag="UpdateDetailsWindow", show=False, width=600, height=550):
-            add_text("Update Details")
-            add_separator()
-            add_text("", tag="update_release_title")
-            add_text("", tag="update_release_version")
-            add_spacer(height=10)
-            add_text("Changelog:")
-            add_input_text(label="", tag="update_release_body", multiline=True, readonly=True, width=560, height=330)
-            add_spacer(height=10)
-            with group(horizontal=True):
-                add_button(label="Open Release Page", tag="open_release_button",
-                        callback=lambda: open_url(LATEST_RELEASE_DETAILS.get("html_url", "https://github.com/StroepWafel/LYTE/releases/latest")))
-                add_button(label="Download Installer", tag="update_download_button", callback=download_installer)
-                add_button(label="Run Installer", tag="update_run_button", callback=run_installer_wrapper)
-                add_button(label="Ignore This Update", tag="ignore_update_button", callback=lambda: ignore_update_action())
-            with tooltip("open_release_button"):
-                add_text("Open the release page in your browser")
-            with tooltip("update_download_button"):
-                add_text("Download the latest installer")
-            with tooltip("update_run_button"):
-                add_text("Run the downloaded installer")
-            with tooltip("ignore_update_button"):
-                add_text("Hide this update notification")
-
-        # =============================================================================
-        # BANNED VIDEOS MANAGEMENT WINDOW
-        # =============================================================================
-        
-        with window(label="Banned Videos", tag="BannedIDsWindow", show=False, width=400, height=400):
-            add_text("Manage Banned Videos")
-            add_separator()
-
-            # Display banned videos list
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in BANNED_IDS], 
-                    tag="banned_ids_list", width=350, num_items=8)
-            add_spacer(height=10)
-
-            # Add new banned video
-            add_input_text(label="Add Video ID", tag="ban_id_input", width=250)
-            add_button(label="Ban Video", callback=lambda: ban_id_callback(), tag="ban_video_button")
-
-            add_spacer(height=10)
-
-            # Remove selected video
-            add_button(label="Unban Selected", callback=lambda: unban_id_callback(), tag="unban_video_button")
-            
-            with tooltip("ban_id_input"):
-                add_text("Enter the YouTube video ID to ban")
-            with tooltip("ban_video_button"):
-                add_text("Add the video to the banned list")
-            with tooltip("unban_video_button"):
-                add_text("Remove the selected video from the banned list")
-
-            add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("BannedIDsWindow", show=False))
-
-        # =============================================================================
-        # WHITELISTED USERS MANAGEMENT WINDOW
-        # =============================================================================
-        
-        with window(label="Whitelisted Users", tag="WhitelistedUsersWindow", show=False, width=400, height=400):
-            add_text("Manage Whitelisted Users")
-            add_separator()
-
-            # Display whitelisted users list
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_USERS], 
-                    tag="whitelisted_users_list", width=350, num_items=8)
-            add_spacer(height=10)
-
-            # Add new whitelisted user
-            add_input_text(label="Add User ID", tag="whitelist_user_input", width=250)
-            add_button(label="Whitelist User", callback=lambda: whitelist_user_callback(), tag="whitelist_user_button")
-
-            add_spacer(height=10)
-
-            # Remove selected user
-            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_user_callback(), tag="unwhitelist_user_button")
-            
-            with tooltip("whitelist_user_input"):
-                add_text("Enter the YouTube user ID to whitelist")
-            with tooltip("whitelist_user_button"):
-                add_text("Add the user to the whitelist")
-            with tooltip("unwhitelist_user_button"):
-                add_text("Remove the selected user from the whitelist")
-
-            add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("WhitelistedUsersWindow", show=False))
-
-        # =============================================================================
-        # WHITELISTED VIDEOS MANAGEMENT WINDOW
-        # =============================================================================
-        
-        with window(label="Whitelisted Videos", tag="WhitelistedIDsWindow", show=False, width=400, height=400):
-            add_text("Manage Whitelisted Videos")
-            add_separator()
-
-            # Display whitelisted videos list
-            add_listbox(items=[f"{u['name']} ({u['id']})" for u in WHITELISTED_IDS], 
-                    tag="whitelisted_ids_list", width=350, num_items=8)
-            add_spacer(height=10)
-
-            # Add new whitelisted video
-            add_input_text(label="Add Video ID", tag="whitelist_id_input", width=250)
-            add_button(label="Whitelist Video", callback=lambda: whitelist_id_callback(), tag="whitelist_video_button")
-
-            add_spacer(height=10)
-
-            # Remove selected video
-            add_button(label="Un-Whitelist Selected", callback=lambda: unwhitelist_id_callback(), tag="unwhitelist_video_button")
-            
-            with tooltip("whitelist_id_input"):
-                add_text("Enter the YouTube video ID to whitelist")
-            with tooltip("whitelist_video_button"):
-                add_text("Add the video to the whitelist")
-            with tooltip("unwhitelist_video_button"):
-                add_text("Remove the selected video from the whitelist")
-
-            add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("WhitelistedIDsWindow", show=False))
-
-        # =============================================================================
-        # QUEUE HISTORY MANAGEMENT WINDOW
-        # =============================================================================
-        
-        with window(label="Queue History", tag="QueueHistoryWindow", show=False, width=600, height=500):
-            add_text("Queue History")
-            add_separator()
-            add_text("Past queued songs (resets on app restart)", color=(200, 200, 200))
-
-            # Display queue history list
-            add_listbox(items=[], 
-                    tag="queue_history_list", width=550, num_items=15)
-            add_spacer(height=10)
-
-            # Ban actions
-            with group(horizontal=True):
-                add_button(label="Ban Selected Song", callback=lambda: ban_song_from_queue(), tag="ban_song_from_queue_button")
-                add_spacer(width=10)
-                add_button(label="Ban Selected User", callback=lambda: ban_user_from_queue(), tag="ban_user_from_queue_button")
-            
-            with tooltip("queue_history_list"):
-                add_text("Select a song from the queue history")
-            with tooltip("ban_song_from_queue_button"):
-                add_text("Ban the song ID from the selected queue entry")
-            with tooltip("ban_user_from_queue_button"):
-                add_text("Ban the user from the selected queue entry")
-
-            add_spacer(height=20)
-            add_button(label="Close", callback=lambda: configure_item("QueueHistoryWindow", show=False))
-    
-    # =============================================================================
-    # GUI FINALIZATION
-    # =============================================================================
-    
-    try:
-        create_default_theme_files()
-        load_all_themes()
-        # Ensure current theme exists, fallback to first available or dark_theme
-        themes = get_available_themes()
-        current = get_current_theme()
-        if current not in themes:
-            if themes:
-                set_current_theme(list(themes.keys())[0])
-            else:
-                set_current_theme("dark_theme")
-        create_viewport(title='LYTE Control Panel', width=1330, height=750)
-        apply_theme(get_current_theme())
-        setup_dearpygui()
-        show_viewport()
-        set_exit_callback(on_close_attempt)
-        configure_viewport(0, resizable=True, min_width=700, min_height=380)
-        start_dearpygui()
-    except Exception as e:
-        logging.error(f"Error in build_gui: {e}")
-        logging.error(traceback.format_exc())
-        raise
-    finally:
-        destroy_context()  
-
-
-def show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None:
-    """
-    Display the initial configuration menu.
-    
-    Args:
-        invalid_id: Whether to show an invalid ID warning
-    """
-    create_context()
-    
-    # Load themes before creating the window so dropdown can access them
-    try:
-        create_default_theme_files()
-        load_all_themes()
-    except Exception as theme_error:
-        logging.error(f"Error loading themes: {theme_error}")
-        logging.error(traceback.format_exc())
-        # Continue anyway - we'll use default theme
-    
-    def save_and_start_callback() -> None:
-        """Save configuration and start the application."""
-
-        # Update Settings from GUI values
-        Settings.YOUTUBE_VIDEO_ID = get_value("id_input")
-        Settings.RATE_LIMIT_SECONDS = int(get_value("rate_limit_input"))
-        Settings.TOAST_NOTIFICATIONS = get_value("toast_checkbox")
-        Settings.PREFIX = get_value("prefix_input")
-        Settings.QUEUE_COMMAND = get_value("queue_input")
-        # Get selected theme
-        selected_theme_display = get_value("theme_dropdown_config")
-        if selected_theme_display:
-            theme_name = get_theme_name_from_display(selected_theme_display)
-            if theme_name and theme_name is not None:
-                Settings.THEME = theme_name
-                set_current_theme(theme_name)
-            else:
-                logging.error(f"Failed to resolve theme name from display name {selected_theme_display!r}")
-        
-        Settings.ALLOW_URLS = get_value("allowURLs_checkbox")
-        Settings.REQUIRE_SUPERCHAT = get_value("require_superchat_checkbox")
-        Settings.MINIMUM_SUPERCHAT = get_value("minimum_superchat_input")
-        Settings.ENFORCE_USER_WHITELIST = get_value("enforce_user_whitelist_checkbox")
-        Settings.ENFORCE_ID_WHITELIST = get_value("enforce_id_whitelist_checkbox")
-        Settings.AUTOREMOVE_SONGS = get_value("autoremove_songs_checkbox")
-        Settings.REQUIRE_MEMBERSHIP = get_value("require_membership_checkbox")
-        Settings.AUTOBAN_USERS = get_value("autoban_users_checkbox")
-        Settings.SONG_FINISH_NOTIFICATIONS = get_value("song_finish_notifications_checkbox_config")
-
-        # Save config to file
-        Settings.save()
-
-        apply_theme(get_current_theme())
-        stop_dearpygui()
-
-    with window(label="Configure LYTE Settings", tag="ConfigWindow", width=0, height=0):
-        set_primary_window("ConfigWindow", True)
-
-        add_input_text(label="YouTube Livestream ID", default_value=Settings.YOUTUBE_VIDEO_ID, tag="id_input")
-
-        if invalid_id:
-            add_text("Invalid or inaccessible livestream ID", color=(255, 100, 100), tag="invalid_id_warning")
-
-        if not_live:
-           add_text("Video is not a livestream", color=(255, 100, 100), tag="invalid_id_warning") 
-
-        add_input_text(label="Command Prefix", default_value=Settings.PREFIX, tag="prefix_input")
-        add_input_text(label="Queue Command", default_value=Settings.QUEUE_COMMAND, tag="queue_input")
-        add_input_int(label="Rate Limit (seconds)", default_value=Settings.RATE_LIMIT_SECONDS, tag="rate_limit_input")
-        add_checkbox(label="Enable Toast Notifications", default_value=Settings.TOAST_NOTIFICATIONS, tag="toast_checkbox")
-        add_checkbox(label="Allow URL Requests", default_value=Settings.ALLOW_URLS, tag="allowURLs_checkbox")
-        add_checkbox(label="Require Membership to request", default_value=Settings.REQUIRE_MEMBERSHIP, tag="require_membership_checkbox")
-        add_checkbox(label="Require Superchat to request", default_value=Settings.REQUIRE_SUPERCHAT, tag="require_superchat_checkbox")
-        add_input_int(label="Minimum Superchat cost (USD)", default_value=Settings.MINIMUM_SUPERCHAT, tag="minimum_superchat_input")
-        add_checkbox(label="Enforce User Whitelist", default_value=Settings.ENFORCE_USER_WHITELIST, tag="enforce_user_whitelist_checkbox")
-        add_checkbox(label="Enforce Song Whitelist", default_value=Settings.ENFORCE_ID_WHITELIST, tag="enforce_id_whitelist_checkbox")
-        add_checkbox(label="Automatically remove songs", default_value=Settings.AUTOREMOVE_SONGS, tag="autoremove_songs_checkbox")
-        add_checkbox(label="Notify When New Song Starts", default_value=Settings.SONG_FINISH_NOTIFICATIONS, tag="song_finish_notifications_checkbox_config")
-        add_checkbox(label="Autoban users", default_value=Settings.AUTOBAN_USERS, tag="autoban_users_checkbox")
-
-
-        # Theme selection dropdown
-        theme_items = get_theme_dropdown_items()
-        if theme_items:
-            # Get current theme display name
-            themes = get_available_themes()
-            current = get_current_theme()
-            current_display = themes.get(current, {}).get("display_name", theme_items[0] if theme_items else "")
-            add_combo(label="Theme", items=theme_items, default_value=current_display, 
-                     tag="theme_dropdown_config", width=200)
-        else:
-            add_text("No themes available", color=(255, 100, 100))
-        
-        add_spacer(height=10)
-        add_button(label="Save and Start", callback=save_and_start_callback)        
-        add_spacer(height=10)
-        add_button(label="Quit", callback=quit_program)
-
-        with tooltip("id_input"):
-            add_text("The ID of your livestream (The 11 characters after 'watch?v=' in the URL)")
-        with tooltip("prefix_input"):
-            add_text("The prefix before a command, useful if you already have another chatbot")
-            add_text("Can be any number of alphanumerical characters")
-        with tooltip("queue_input"):
-            add_text("The command users need to enter after the prefix to queue a song. Cannot contain spaces")
-        with tooltip("rate_limit_input"):
-            add_text("How long a user has to wait before they can queue another song, in seconds")
-        with tooltip("toast_checkbox"):
-            add_text("Whether or not to show desktop notifications when a song is queued")
-        with tooltip("allowURLs_checkbox"):
-            add_text("Whether or not users can request songs with full URLs (I.e; the full 'https://' link)")
-        with tooltip("require_membership_checkbox"):
-            add_text("Whether or not users need to be a member of the channel to request a song")
-        with tooltip("require_superchat_checkbox"):
-            add_text("Whether or not users need to send a superchat to request a song")
-        with tooltip("minimum_superchat_input"):
-            add_text("The minimum value superchat (in USD) that a user must spend to request a song")
-            add_text("Supplementary to 'Require Superchat to request'")
-        with tooltip("theme_dropdown_config"):
-            add_text("Select a theme for the application")
-        with tooltip("enforce_user_whitelist_checkbox"):
-            add_text("Whether or not to enforce the user Whitelist")
-        with tooltip("enforce_id_whitelist_checkbox"):
-            add_text("Whether or not to enforce the song ID Whitelist")
-        with tooltip("autoremove_songs_checkbox"):
-            add_text("Whether or not to automatically remove finished/skipped songs from the queue (applies after restart)")
-        with tooltip("song_finish_notifications_checkbox_config"):
-            add_text("Whether or not to show desktop notifications when a new song starts playing (only when songs finish naturally, not when skipped)")
-        with tooltip("autoban_users_checkbox"):
-            add_text("Whether or not to automatically ban users who try to request banned songs")
-            
-        
-    # Ensure current theme exists, fallback to first available or dark_theme
-    themes = get_available_themes()
-    current = get_current_theme()
-    if not themes or current not in themes:
-        if themes:
-            set_current_theme(list(themes.keys())[0])
-        else:
-            # No themes loaded - create a basic dark theme as fallback
-            set_current_theme("dark_theme")
-            logging.warning("No themes available, using default dark theme")
-    
-    try:
-        create_viewport(title='Configure LYTE', width=750, height=535)
-        try:
-            apply_theme(get_current_theme())
-        except Exception as theme_apply_error:
-            logging.error(f"Error applying theme: {theme_apply_error}")
-            # Continue without theme
-        setup_dearpygui()
-        show_viewport()
-        set_exit_callback(on_close_attempt)
-        configure_viewport(0, resizable=False)
-        start_dearpygui()
-    except Exception as e:
-        logging.error(f"Error in show_config_menu: {e}")
-        logging.error(traceback.format_exc())
-        # Re-raise to see the full error
-        raise
-    finally:
-        destroy_context()
-
 
 # =============================================================================
 # BACKGROUND THREADING FUNCTIONS
@@ -2056,20 +1132,15 @@ def vlc_loop() -> None:
 def update_slider_thread() -> None:
     """
     Update the song progress slider in real-time.
-    
-    Runs in a background thread to continuously update the progress slider
-    and time display, respecting user input to prevent conflicts.
+    Uses GUI_BRIDGE when available (PySide6).
     """
-    global ignore_slider_callback
-
-    # Wait for GUI to be ready
-    while not does_item_exist(song_slider_tag) and not should_exit:
+    while not GUI_BRIDGE and not should_exit:
         time.sleep(0.1)
 
     while not should_exit:
         time.sleep(0.1)
         media_player = player.get_media_player()
-        if not media_player:
+        if not media_player or not GUI_BRIDGE:
             continue
 
         curr = get_curr_songtime()
@@ -2077,15 +1148,12 @@ def update_slider_thread() -> None:
         if curr is None or total is None or total <= 0:
             continue
 
-        # Only update slider if user hasn't just scrubbed
-        if current_time() - last_user_seek_time > 1.0 and does_item_exist(song_slider_tag):
-            progress = curr / total
-            ignore_slider_callback = True
-            set_value(song_slider_tag, progress)
-            ignore_slider_callback = False
+        time_text = f"{format_time(curr)} / {format_time(total)}"
+        GUI_BRIDGE.update_time_text.emit(time_text)
 
-        # Update time text regardless
-        set_value("song_time_text", f"{format_time(curr)} / {format_time(total)}")
+        if current_time() - last_user_seek_time > 1.0:
+            progress = curr / total
+            GUI_BRIDGE.update_slider.emit(progress)
 
 def update_now_playing_thread() -> None:
     """
@@ -2103,27 +1171,16 @@ def enable_update_menu_thread() -> None:
     """Enable the update details menu and show download UI when an update is detected."""
     while not should_exit:
         try:
-            if UPDATE_AVAILABLE:
-                if does_item_exist("update_details_menu"):
-                    configure_item("update_details_menu", enabled=True)
-                if LATEST_VERSION and does_item_exist("MainWindow"):
-                    # Ensure download UI is visible
-                    show_download_ui(LATEST_VERSION)
+            if UPDATE_AVAILABLE and LATEST_VERSION and GUI_BRIDGE:
+                show_download_ui(LATEST_VERSION)
             time.sleep(1)
         except Exception:
             time.sleep(2)
 
 def start_theme_watcher_thread() -> None:
-    """
-    Start the theme file watcher after the GUI is ready.
-    
-    Waits for the main window to exist before starting the file watcher
-    to ensure the GUI is fully initialized.
-    """
-    # Wait for GUI to be ready
-    while not does_item_exist("MainWindow") and not should_exit:
+    """Start the theme file watcher after the GUI is ready."""
+    while not GUI_BRIDGE and not should_exit:
         time.sleep(0.1)
-    
     if not should_exit:
         start_theme_file_watcher()
 
@@ -2132,25 +1189,32 @@ def start_theme_watcher_thread() -> None:
 # APPLICATION STARTUP
 # =============================================================================
 
-# Show configuration editor first
-show_config_menu()
+from gui.config_window import show_config_dialog
+from gui.app import run_gui
 
-# Wait for valid configuration
+# Show configuration editor first (blocks until user saves or quits)
+invalid_id = False
+not_live = False
 while not should_exit:
-    not_live = False
-    invalid_id = False
+    if not show_config_dialog(invalid_id=invalid_id, not_live=not_live):
+        break  # User clicked Quit
+
     load_config()
-    # Ensure we're using the latest video ID from Settings
     current_video_id = Settings.YOUTUBE_VIDEO_ID
     if initialize_chat():
-        # Double-check we're still validating the same video ID
         if current_video_id == Settings.YOUTUBE_VIDEO_ID and is_youtube_live(Settings.YOUTUBE_VIDEO_ID):
             break
         logging.warning("Video is not a Live. Reloading config window.")
-        show_config_menu(not_live = True)
+        invalid_id = False
+        not_live = True
     else:
         logging.warning("Chat init failed. Reloading config window.")
-        show_config_menu(invalid_id= True)
+        invalid_id = True
+        not_live = False
+
+if should_exit:
+    import sys
+    sys.exit(0)
 
 # Load final configuration
 load_config()
@@ -2159,14 +1223,13 @@ load_config()
 threading.Thread(target=check_for_updates_wrapper, daemon=True).start()
 threading.Thread(target=enable_update_menu_thread, daemon=True).start()
 
-# Start all background threads
-threading.Thread(target=build_gui, daemon=True).start()
+# Start background threads
 threading.Thread(target=vlc_loop, daemon=True).start()
 threading.Thread(target=poll_chat, daemon=True).start()
 threading.Thread(target=update_slider_thread, daemon=True).start()
 threading.Thread(target=update_now_playing_thread, daemon=True).start()
 threading.Thread(target=start_theme_watcher_thread, daemon=True).start()
 
-# Main application loop
-while not should_exit:
-    time.sleep(1)
+# Run GUI (blocks until quit)
+import sys
+run_gui(sys.modules['__main__'])

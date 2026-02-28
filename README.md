@@ -84,7 +84,7 @@ The default command to queue a song is `!queue <VIDEO_ID>`, where `<VIDEO_ID>` i
 5. In the window that opened, change `YOUTUBE_VIDEO_ID` to the ID of your live stream (i.e., the characters at the end of the URL, after the `?v=`)
 6. *OPTIONAL*: Change the other configs. Documentation can be found in [Config Documentation](#config-documentation)
 7. Press "Save and Start"
-8. A separate window will open, here you can play/pause, skip the song or go back, refresh the UI, change the volume, or scrub through the music. You can also open the settings tab to edit the settings while the program is running, and you can change themes from the View menu.
+8. A separate control panel window will open (modern PySide6-based UI). You can play/pause, skip the song or go back, refresh the UI, change the volume, or scrub through the music. You can also open the settings dialog to edit settings while running, and change themes from the View menu.
 9. If you want to quit the program, please use the `Quit` button; otherwise, the program may not close correctly, and you will have to close the terminal manually.
 
 
@@ -106,7 +106,7 @@ For Windows:
 7. In the window that opened, change `YOUTUBE_VIDEO_ID` to the ID of your live stream (i.e., the characters at the end of the URL, after the `?v=`)
 8. *OPTIONAL*: Change the other configs. Documentation can be found in [Config Documentation](#config-documentation)
 9. Press "Save and Start"
-10. A separate window will open, here you can play/pause, skip the song or go back, refresh the UI, change the volume, or scrub through the song. You can also open the settings tab to edit the settings while the program is running and you can change themes from the View menu.
+10. A separate control panel window will open (modern PySide6-based UI). You can play/pause, skip the song or go back, refresh the UI, change the volume, or scrub through the song. You can also open the settings dialog to edit settings while running, and change themes from the View menu.
 11. If you want to quit the program, please use the `Quit` button; otherwise, the program may not close correctly, and you will have to close the terminal manually.
 
 ## Temporarily Disabling real-time protection
@@ -216,6 +216,8 @@ This file is used to store all whitelisted YouTube user IDs. Each entry should b
 
 # Gallery
 
+The GUI uses PySide6 (Qt) with a modern, customizable theme system. Settings and moderation are accessed via modal dialogs; the main control panel provides playback controls, volume, and song progress.
+
 Settings UI:  
 <img width="731" height="443" alt="SettingsUI" src="https://github.com/user-attachments/assets/5ed48e4f-61a2-4693-b605-c2dd849a9ff8" />
 
@@ -229,7 +231,7 @@ Control Panel:
 - This program can be run on any Windows PC with no API key or cookie required
 - If used, please credit the repository in the description or somewhere in the video
 - The program includes built-in update checking and can download installers automatically
-- Themes can be customized by editing JSON files in the themes folder
+- Themes can be customized by editing JSON files in the themes folder (PySide6/Qt stylesheets; JSON structure unchanged)
 - Queue history is available through the Moderation menu to help manage song requests
 
 ## Stars

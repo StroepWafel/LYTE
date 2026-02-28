@@ -2,8 +2,8 @@
 
 from PyInstaller.utils.hooks import collect_all
 
-# Grab all Dear PyGui files (DLLs, pyd, etc.)
-dpg_datas, dpg_binaries, dpg_hiddenimports = collect_all('dearpygui')
+# Grab all PySide6 files (DLLs, plugins, etc.)
+pyside6_datas, pyside6_binaries, pyside6_hiddenimports = collect_all('PySide6')
 
 added_files = [
     ('Src/themes', 'themes'),  # Bundle themes folder into the executable (includes demo_theme.json.demo)
@@ -12,13 +12,13 @@ added_files = [
 a = Analysis(
     ['Src\\main.py'],
     pathex=[],
-    binaries=dpg_binaries,
-    datas=added_files + dpg_datas,
+    binaries=pyside6_binaries,
+    datas=added_files + pyside6_datas,
     hiddenimports=[
         'plyer.platforms.win.notification',
         'plyer.platforms.linux.notification',
         'plyer.platforms.darwin.notification',
-        *dpg_hiddenimports
+        *pyside6_hiddenimports
     ],
     hookspath=[],
     hooksconfig={},
