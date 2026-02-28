@@ -4,6 +4,6 @@ requests
 plyer
 python-vlc
 pyinstaller
-dearpygui
+PySide6
 forex-python
 watchdog

@@ -7,6 +7,7 @@ Complete documentation for all functions, variables, and operations in the LYTE 
 - [Settings Management](#settings-management)
 - [Global Variables](#global-variables)
 - [Main Functions](#main-functions)
+- [GUI Module](#gui-module)
 - [Helper Functions](#helper-functions)
 - [How-To Guides](#how-to-guides)
 - [Configuration Variables](#configuration-variables)
@@ -129,9 +130,8 @@ All settings can be accessed and modified via `Settings.FIELD_NAME`:
 
 ### GUI State
 
-- `now_playing_text`: GUI text element for "Now Playing" display
-- `song_slider_tag` (str): Tag for song progress slider
-- `ignore_slider_callback` (bool): Flag to prevent slider callback conflicts
+- `GUI_BRIDGE` (ThreadBridge): Qt signal bridge for cross-thread GUI updates. Worker threads emit signals; slots run on the GUI thread. Set when the main window starts.
+- `GUI_MAIN_WINDOW_REF` (list): Holds reference to the MainWindow instance for theme watcher and other GUI access.
 
 ---
 
@@ -190,21 +190,17 @@ Mark that the next song change is user-initiated (skip). Prevents natural comple
 set_user_initiated_skip()
 ```
 
-#### `on_song_slider_change(sender, app_data, user_data) -> None`
-Handle song progress slider changes. Updates playback position.
+#### `on_song_slider_change(value: float) -> None`
+Handle song progress slider changes. Updates playback position. Called from Qt slot when user seeks.
 
 **Parameters:**
-- `sender`: GUI element that triggered the callback
-- `app_data`: New slider value (0.0 to 1.0)
-- `user_data`: Additional user data
+- `value`: New slider value (0.0 to 1.0)
 
-#### `on_volume_change(sender, app_data, user_data) -> None`
-Handle volume slider changes. Updates Settings and VLC volume.
+#### `on_volume_change(value: float) -> None`
+Handle volume slider changes. Updates Settings and VLC volume. Called from Qt slot.
 
 **Parameters:**
-- `sender`: GUI element that triggered the callback
-- `app_data`: New volume value (0.0 to 100.0)
-- `user_data`: Additional user data
+- `value`: New volume value (0 to 100)
 
 ### Queue Management
 
@@ -242,7 +238,7 @@ show_toast("dQw4w9WgXcQ", "Username")
 ### GUI Update Functions
 
 #### `update_now_playing() -> None`
-Update the 'Now Playing' display in the GUI. Fetches current media title and updates GUI text element.
+Update the 'Now Playing' display in the GUI. Fetches current media title and emits `update_now_playing` on `GUI_BRIDGE`; the slot updates the display on the GUI thread.
 
 ```python
 update_now_playing()
@@ -293,107 +289,53 @@ if is_youtube_live("dQw4w9WgXcQ"):
 ### List Management Functions
 
 #### `refresh_banned_users_list() -> None`
-Update the banned users list in the GUI.
+Update the banned users list in the GUI. Emits `refresh_list` on `GUI_BRIDGE`; the slot updates the Qt list widget on the GUI thread.
 
 ```python
 refresh_banned_users_list()
 ```
 
 #### `refresh_banned_ids_list() -> None`
-Update the banned video IDs list in the GUI.
+Update the banned video IDs list in the GUI (via `GUI_BRIDGE.refresh_list`).
 
 ```python
 refresh_banned_ids_list()
 ```
 
 #### `refresh_whitelisted_users_list() -> None`
-Update the whitelisted users list in the GUI.
+Update the whitelisted users list in the GUI (via `GUI_BRIDGE.refresh_list`).
 
 ```python
 refresh_whitelisted_users_list()
 ```
 
 #### `refresh_whitelisted_ids_list() -> None`
-Update the whitelisted video IDs list in the GUI.
+Update the whitelisted video IDs list in the GUI (via `GUI_BRIDGE.refresh_list`).
 
 ```python
 refresh_whitelisted_ids_list()
 ```
 
 #### `refresh_queue_history_list() -> None`
-Update the queue history list in the GUI.
+Update the queue history list in the GUI (via `GUI_BRIDGE.refresh_list`).
 
 ```python
 refresh_queue_history_list()
 ```
 
-### Ban/Unban Callback Functions
+### Ban/Unban and Moderation
 
-#### `ban_user_callback() -> None`
-Handle banning a user from the GUI. Adds user to banned list with placeholder name, then fetches real channel name in background.
-
-```python
-ban_user_callback()
-```
-
-#### `ban_id_callback() -> None`
-Handle banning a video ID from the GUI. Adds video to banned list with placeholder name, then fetches real video name in background.
-
-```python
-ban_id_callback()
-```
-
-#### `whitelist_user_callback() -> None`
-Handle whitelisting a user from the GUI.
-
-```python
-whitelist_user_callback()
-```
-
-#### `whitelist_id_callback() -> None`
-Handle whitelisting a video ID from the GUI.
-
-```python
-whitelist_id_callback()
-```
-
-#### `unban_user_callback() -> None`
-Remove selected user from banned users list.
-
-```python
-unban_user_callback()
-```
-
-#### `unban_id_callback() -> None`
-Remove selected video ID from banned video IDs list.
-
-```python
-unban_id_callback()
-```
-
-#### `unwhitelist_user_callback() -> None`
-Remove selected user from whitelisted users list.
-
-```python
-unwhitelist_user_callback()
-```
-
-#### `unwhitelist_id_callback() -> None`
-Remove selected video ID from whitelisted video IDs list.
-
-```python
-unwhitelist_id_callback()
-```
+Ban/unban/whitelist actions are handled in the **Moderation** modal windows (Moderation → Manage Banned Users, etc.). Those dialogs add/remove entries, save to file, and trigger `refresh_*_list` to update the display. Programmatic updates should call `refresh_*_list()` after modifying the data.
 
 #### `ban_song_from_queue() -> None`
-Ban the song from the selected queue history entry.
+Ban the song from the selected queue history entry. Called from the Queue History modal.
 
 ```python
 ban_song_from_queue()
 ```
 
 #### `ban_user_from_queue() -> None`
-Ban the user from the selected queue history entry.
+Ban the user from the selected queue history entry. Called from the Queue History modal.
 
 ```python
 ban_user_from_queue()
@@ -402,28 +344,13 @@ ban_user_from_queue()
 ### Theme Management Functions
 
 #### `select_theme_by_name(theme_name: str) -> None`
-Select a theme by its name. Updates menu checkmarks and saves theme preference.
+Select a theme by name. Updates the View → Theme submenu checkmarks, applies the theme via the theme engine, and saves the preference.
 
 **Parameters:**
 - `theme_name`: Name of the theme to select
 
 ```python
 select_theme_by_name("dark_theme")
-```
-
-#### `select_theme(sender, app_data, user_data) -> None`
-Handle theme selection from dropdown (for combo boxes).
-
-**Parameters:**
-- `sender`: GUI element that triggered the callback
-- `app_data`: Selected theme display name
-- `user_data`: Additional user data
-
-#### `update_theme_menu_checks() -> None`
-Update checkmarks on theme menu items.
-
-```python
-update_theme_menu_checks()
 ```
 
 #### `save_theme_to_config() -> None`
@@ -440,17 +367,11 @@ Reload all themes from disk. Unloads all themes, loads them again, applies curre
 reload_themes()
 ```
 
-#### `rebuild_theme_menu_items() -> None`
-Regenerate the Theme menu items based on currently available themes.
-
-```python
-rebuild_theme_menu_items()
-```
 
 ### Theme File Watcher
 
 #### `start_theme_file_watcher() -> None`
-Start monitoring the themes folder for file changes. Automatically reloads themes when changes are detected.
+Start monitoring the themes folder for file changes. When a theme file changes, themes are reloaded and the theme engine reapplies the current theme to the Qt stylesheet.
 
 ```python
 start_theme_file_watcher()
@@ -512,22 +433,24 @@ show_update_details_window()
 
 ### GUI Construction
 
-#### `build_gui() -> None`
-Build and display the main application GUI. Creates the main control panel window with all controls.
+#### `run_gui(main_module) -> None`
+Run the main PySide6 GUI. Creates the QApplication, MainWindow, ThreadBridge, and runs `QApplication.exec()`. Blocks until the user closes the window. Called from the main script after configuration is validated.
 
-```python
-build_gui()
-```
+**Parameters:**
+- `main_module`: The main module (e.g. `sys.modules['__main__']`) for accessing globals and callbacks
 
-#### `show_config_menu(invalid_id: bool = False, not_live: bool = False) -> None`
-Display the initial configuration menu.
+#### `show_config_dialog(invalid_id: bool = False, not_live: bool = False) -> bool`
+Display the initial configuration dialog (pre-start). User configures YouTube livestream ID, settings, and theme. Returns `True` if user clicked Save and Start, `False` if Quit.
 
 **Parameters:**
 - `invalid_id`: Whether to show an invalid ID warning
 - `not_live`: Whether to show a "not live" warning
 
+**Returns:** `True` to continue startup, `False` to quit
+
 ```python
-show_config_menu(invalid_id=True)
+if not show_config_dialog(invalid_id=True):
+    sys.exit(0)
 ```
 
 ### Background Threading Functions
@@ -549,7 +472,7 @@ threading.Thread(target=vlc_loop, daemon=True).start()
 ```
 
 #### `update_slider_thread() -> None`
-Update the song progress slider in real-time. Continuously updates progress slider and time display.
+Update the song progress slider in real-time. Waits for `GUI_BRIDGE` to be set, then periodically emits `update_slider` and `update_time_text` signals; slots on the GUI thread update the widgets.
 
 ```python
 # Typically run in a thread:
@@ -557,7 +480,7 @@ threading.Thread(target=update_slider_thread, daemon=True).start()
 ```
 
 #### `update_now_playing_thread() -> None`
-Update the 'Now Playing' display periodically. Keeps current song information displayed in GUI up to date.
+Update the 'Now Playing' display periodically. Emits `update_now_playing` on `GUI_BRIDGE`; the slot updates the display on the GUI thread.
 
 ```python
 # Typically run in a thread:
@@ -565,7 +488,7 @@ threading.Thread(target=update_now_playing_thread, daemon=True).start()
 ```
 
 #### `enable_update_menu_thread() -> None`
-Enable the update details menu and show download UI when an update is detected.
+Enable the update details menu and show download UI when an update is detected. Emits `show_download_ui` on `GUI_BRIDGE` when an update is available.
 
 ```python
 # Typically run in a thread:
@@ -573,7 +496,7 @@ threading.Thread(target=enable_update_menu_thread, daemon=True).start()
 ```
 
 #### `start_theme_watcher_thread() -> None`
-Start the theme file watcher after the GUI is ready. Waits for main window to exist before starting.
+Start the theme file watcher after the GUI is ready. Waits for `GUI_MAIN_WINDOW_REF` to be populated before starting.
 
 ```python
 # Typically run in a thread:
@@ -616,6 +539,49 @@ Load settings from config file and update global variables.
 ```python
 load_settings_wrapper()
 ```
+
+---
+
+## GUI Module
+
+The GUI is implemented with **PySide6** (Qt for Python) in `Src/gui/`. It runs in the main thread during normal operation (config dialog blocks first, then `run_gui()` blocks on `QApplication.exec()`).
+
+### Module Structure
+
+| File | Purpose |
+|------|---------|
+| `__init__.py` | Exports `launch_gui_thread` |
+| `app.py` | `QApplication` singleton, `run_gui()` entry point |
+| `config_window.py` | Pre-start config dialog (YouTube ID, settings, theme) |
+| `main_window.py` | Main control panel: menu bar, now playing, playback, volume, progress, console |
+| `settings_window.py` | Settings modal |
+| `moderation_windows.py` | Banned users/videos, Whitelisted users/videos, Queue history modals |
+| `update_window.py` | Update details modal |
+| `theme_engine.py` | Converts JSON themes to Qt stylesheets (QSS) |
+| `custom_widgets.py` | Custom QWidget subclasses (Card, StyledButton) |
+| `thread_bridge.py` | Qt signals for cross-thread updates |
+
+### ThreadBridge Signals
+
+Worker threads must not update Qt widgets directly. They emit signals on `GUI_BRIDGE`; the slots run on the GUI thread and update the widgets.
+
+| Signal | Parameters | Purpose |
+|--------|------------|---------|
+| `update_slider` | `float` (0.0–1.0) | Song progress slider |
+| `update_time_text` | `str` | "MM:SS / MM:SS" time display |
+| `update_now_playing` | `str` | "Now Playing: Title" |
+| `refresh_list` | `str`, `list` | List ID and items for moderation/list widgets |
+| `show_download_ui` | `str` | Latest version for update banner |
+| `hide_update_ui` | — | Hide update notification |
+| `set_console_text` | `str` | Append log line to console |
+
+### How Workers Update the UI
+
+- **update_slider_thread**: Emits `GUI_BRIDGE.update_slider` and `GUI_BRIDGE.update_time_text`
+- **update_now_playing_thread**: Emits `GUI_BRIDGE.update_now_playing`
+- **enable_update_menu_thread**: Emits `GUI_BRIDGE.show_download_ui` when an update is detected
+- **refresh_*_list**: Emit `GUI_BRIDGE.refresh_list(list_id, items)` with the list ID and item strings
+- **Theme watcher**: On file change, reloads themes and calls `apply_theme()` which uses the theme engine to refresh the Qt stylesheet
 
 ---
 
@@ -945,6 +911,17 @@ details = fetch_latest_release_details()
 
 ### Theme Helpers (`helpers/theme_helpers.py`)
 
+#### `register_theme_applier(applier) -> None`
+Register a callback to apply themes to the GUI. Called by the GUI module at startup to wire theme_engine → Qt stylesheet application.
+
+**Parameters:**
+- `applier`: Callback function `(theme_name: str) -> None` that applies the theme
+
+```python
+# Typically used internally by gui/app.py:
+register_theme_applier(lambda name: apply_theme_to_app(app, name, load_theme_from_file))
+```
+
 #### `init_theme_system(themes_folder: str) -> None`
 Initialize the theme system with the themes folder path.
 
@@ -956,15 +933,15 @@ init_theme_system("path/to/themes")
 ```
 
 #### `discover_themes() -> dict`
-Scan the themes folder and discover all available theme files. Checks both PyInstaller bundle location and user app folder.
+Scan the themes folder and discover all available theme files. Supports both `.json` (converted to QSS) and `.qss` (raw Qt stylesheet) files. Checks both PyInstaller bundle location and user app folder.
 
-**Returns:** Dictionary mapping theme names to theme info
+**Returns:** Dictionary mapping theme names to theme info (each entry includes `theme_type`: `"json"` or `"qss"`)
 
 ```python
 themes = discover_themes()
 ```
 
-#### `load_theme_from_file(theme_name: str) -> dict`
+#### `load_theme_from_file(theme_name: str) -> dict | None`
 Load theme configuration from a JSON file. Checks user folder first, then PyInstaller bundle location.
 
 **Parameters:**
@@ -976,15 +953,24 @@ Load theme configuration from a JSON file. Checks user folder first, then PyInst
 theme_data = load_theme_from_file("dark_theme")
 ```
 
-#### `apply_theme_from_data(theme_tag: str, theme_data: dict) -> None`
-Apply theme data to create a DearPyGui theme.
+#### `load_qss_from_file(theme_name: str) -> str | None`
+Load a raw QSS (Qt stylesheet) theme from file. Used when `theme_type` is `"qss"`.
 
 **Parameters:**
-- `theme_tag`: Tag identifier for the theme
-- `theme_data`: Dictionary containing 'colors' and 'styles' keys
+- `theme_name`: Name of the theme file (without .qss extension)
+
+**Returns:** Raw QSS content, or None if not found
 
 ```python
-apply_theme_from_data("dark_theme", theme_data)
+qss = load_qss_from_file("my_custom")
+```
+
+#### `get_theme_type(theme_name: str) -> str`
+Return `"json"` or `"qss"` for the given theme. Defaults to `"json"` if unknown.
+
+```python
+theme_type = get_theme_type("dark_theme")  # "json"
+theme_type = get_theme_type("ocean")        # "qss" if ocean.qss exists
 ```
 
 #### `create_default_theme_files() -> None`
@@ -995,20 +981,10 @@ create_default_theme_files()
 ```
 
 #### `load_all_themes() -> None`
-Load all discovered themes into DearPyGui.
+Load all discovered themes into the internal registry. Framework-agnostic; the theme engine applies them to the PySide6/Qt stylesheet when `apply_theme` is called.
 
 ```python
 load_all_themes()
-```
-
-#### `create_theme(theme_name: str) -> None`
-Create and configure a theme for the GUI.
-
-**Parameters:**
-- `theme_name`: Name of the theme to create
-
-```python
-create_theme("dark_theme")
 ```
 
 #### `apply_theme(theme_tag: str) -> None`
@@ -1071,7 +1047,7 @@ set_current_theme("dark_theme")
 ```
 
 #### `unload_all_themes() -> None`
-Unload all themes from DearPyGui and clear the internal registry.
+Unload all themes from the internal registry. Called before reloading themes.
 
 ```python
 unload_all_themes()
@@ -1096,12 +1072,8 @@ Settings.save()
 
 ### How to Ban a User
 
-**Method 1: Using the GUI callback**
-```python
-# Set the input value first (via GUI)
-# Then call:
-ban_user_callback()
-```
+**Method 1: Using the Moderation window**
+Open **Moderation → Manage Banned Users**, add the user (ID or channel URL), and Save.
 
 **Method 2: Programmatically**
 ```python
@@ -1122,12 +1094,8 @@ refresh_banned_users_list()
 
 ### How to Ban a Video
 
-**Method 1: Using the GUI callback**
-```python
-# Set the input value first (via GUI)
-# Then call:
-ban_id_callback()
-```
+**Method 1: Using the Moderation window**
+Open **Moderation → Manage Banned Videos**, add the video ID or URL, and Save.
 
 **Method 2: Programmatically**
 ```python
@@ -1148,12 +1116,8 @@ refresh_banned_ids_list()
 
 ### How to Whitelist a User
 
-**Method 1: Using the GUI callback**
-```python
-# Set the input value first (via GUI)
-# Then call:
-whitelist_user_callback()
-```
+**Method 1: Using the Moderation window**
+Open **Moderation → Manage Whitelisted Users**, add the user, and Save.
 
 **Method 2: Programmatically**
 ```python
@@ -1174,12 +1138,8 @@ refresh_whitelisted_users_list()
 
 ### How to Whitelist a Video
 
-**Method 1: Using the GUI callback**
-```python
-# Set the input value first (via GUI)
-# Then call:
-whitelist_id_callback()
-```
+**Method 1: Using the Moderation window**
+Open **Moderation → Manage Whitelisted Videos**, add the video ID or URL, and Save.
 
 **Method 2: Programmatically**
 ```python
@@ -1200,7 +1160,10 @@ refresh_whitelisted_ids_list()
 
 ### How to Change Theme
 
-**Method 1: Using the function**
+**Method 1: Using the menu**
+Use **View → Theme** and select a theme. The theme engine applies it to the Qt stylesheet and saves the preference.
+
+**Method 2: Programmatically**
 ```python
 from helpers.theme_helpers import set_current_theme, apply_theme
 
@@ -1209,7 +1172,7 @@ apply_theme("dark_theme")
 save_theme_to_config()
 ```
 
-**Method 2: Using Settings**
+**Method 3: Using Settings**
 ```python
 Settings.THEME = "dark_theme"
 set_current_theme(Settings.THEME)
@@ -1309,61 +1272,70 @@ show_folder(app_folder)
 
 ### How to Create a Custom Theme
 
-1. Create a JSON file in the themes folder (e.g., `custom_theme.json`)
-2. Use the following structure:
+**Option A: JSON themes** — Use a JSON structure with `colors` and `styles` keys.
+
+**Option B: QSS themes** — Use raw Qt stylesheets for full control. Copy `custom_theme.qss.example` to `yourname.qss`, edit, and select from View → Theme.
+
+Themes hot-reload when you edit theme files while LYTE is running. Use **View → Reload themes** for new themes (no restart needed).
+
+**Full reference:** See [docs/theme-documentation.md](docs/theme-documentation.md) for JSON structure and QSS syntax.
+
+**JSON:** Create a file in the themes folder (e.g., `custom_theme.json`). The `demo_theme.json.demo` file shows the full structure with a blue/ocean palette—rename it to `.json` to use it. Minimal structure:
 
 ```json
 {
   "name": "Custom Theme",
   "colors": {
-    "WindowBg": [25, 25, 25, 255],
-    "FrameBg": [35, 35, 35, 255],
-    "Button": [60, 70, 60, 255],
-    "ButtonHovered": [80, 120, 80, 255],
-    "ButtonActive": [100, 150, 100, 255],
-    "Text": [220, 220, 220, 255],
-    "SliderGrab": [100, 150, 100, 255],
-    "SliderGrabActive": [120, 180, 120, 255],
-    "Header": [40, 40, 40, 255],
-    "ScrollbarBg": [35, 35, 35, 128],
-    "ScrollbarGrab": [60, 70, 60, 255],
-    "ScrollbarGrabHovered": [80, 120, 80, 255],
-    "ScrollbarGrabActive": [100, 150, 100, 255],
-    "CheckMark": [100, 150, 100, 255],
-    "HeaderHovered": [80, 120, 80, 255],
-    "HeaderActive": [100, 150, 100, 255],
-    "Tab": [60, 70, 60, 255],
-    "TabHovered": [80, 120, 80, 255],
-    "TabActive": [100, 150, 100, 255],
-    "TitleBg": [25, 25, 25, 255],
-    "TitleBgActive": [40, 50, 40, 255],
-    "TitleBgCollapsed": [25, 25, 25, 128],
-    "MenuBarBg": [30, 30, 30, 255],
-    "Border": [70, 90, 70, 255],
-    "Separator": [70, 90, 70, 255],
-    "PopupBg": [35, 35, 35, 240],
-    "TextSelectedBg": [80, 120, 80, 150]
+    "WindowBg": [18, 24, 34, 255],
+    "FrameBg": [30, 40, 56, 255],
+    "Button": [40, 90, 160, 255],
+    "ButtonHovered": [55, 120, 200, 255],
+    "ButtonActive": [35, 95, 170, 255],
+    "Text": [220, 230, 245, 255],
+    "SliderGrab": [70, 140, 220, 255],
+    "SliderGrabActive": [90, 160, 240, 255],
+    "Header": [35, 50, 75, 255],
+    "HeaderHovered": [55, 120, 200, 255],
+    "HeaderActive": [40, 90, 160, 255],
+    "ScrollbarBg": [18, 24, 34, 180],
+    "ScrollbarGrab": [60, 120, 190, 255],
+    "ScrollbarGrabHovered": [80, 150, 220, 255],
+    "ScrollbarGrabActive": [55, 110, 180, 255],
+    "CheckMark": [100, 160, 240, 255],
+    "Tab": [30, 40, 56, 255],
+    "TabHovered": [55, 120, 200, 255],
+    "TabActive": [40, 90, 160, 255],
+    "TitleBg": [22, 28, 40, 255],
+    "TitleBgActive": [30, 40, 56, 255],
+    "TitleBgCollapsed": [22, 28, 40, 180],
+    "MenuBarBg": [25, 32, 48, 255],
+    "Border": [45, 60, 95, 255],
+    "Separator": [45, 60, 95, 255],
+    "PopupBg": [20, 26, 38, 245],
+    "TextSelectedBg": [55, 120, 200, 150]
   },
   "styles": {
-    "FrameRounding": 8.0,
+    "FrameRounding": 8,
     "FrameBorderSize": 0.5,
-    "WindowRounding": 12.0,
-    "ScrollbarSize": 12.0,
-    "ScrollbarRounding": 8.0,
-    "TabRounding": 8.0,
-    "GrabRounding": 8.0,
-    "ChildRounding": 8.0,
-    "PopupRounding": 8.0,
+    "WindowRounding": 12,
+    "ScrollbarSize": 12,
+    "ScrollbarRounding": 8,
+    "TabRounding": 8,
+    "GrabRounding": 8,
+    "ChildRounding": 8,
+    "PopupRounding": 8,
     "ItemSpacing": [8, 6],
     "ItemInnerSpacing": [6, 6]
   }
 }
 ```
 
-3. Reload themes:
+3. Use **View → Reload themes** in the menu, or programmatically:
 ```python
 reload_themes()
 ```
+
+Themes are applied via the **theme engine** (`gui/theme_engine.py`), which converts the JSON colors and styles to Qt stylesheets (QSS). Theme files are watched for changes and reload automatically.
 
 ### How to Access Queue History
 
@@ -1543,6 +1515,19 @@ File system event handler for theme files. Automatically reloads themes when the
 
 **Methods:**
 - `on_any_event(event)`: Handle any file system event in the themes folder
+
+---
+
+## External Documentation (stroepwafel.au)
+
+Website documentation at [stroepwafel.au/LYTE/documentation](https://www.stroepwafel.au/LYTE/documentation) can be updated from the `docs/` folder in this repo:
+
+- **[docs/theme-documentation.md](docs/theme-documentation.md)** — Theme Documentation source. Sync to the live Theme Documentation page. Describes the PySide6/Qt interface, JSON structure, and how themes are applied via Qt stylesheets.
+
+Additional pages to update if maintained externally:
+
+- **Configuration**, **Quickstart**, **Other Installation Methods**: Update any references to the Settings window, control panel, or UI flow. Replace screenshots if the look has changed.
+- **Troubleshooting**, **Advanced Features**: Review for GUI-specific content; update as needed.
 
 ---
 

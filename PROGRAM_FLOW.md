@@ -16,7 +16,7 @@ flowchart TD
     LoadFiles --> InitSettings[Initialize Settings Class<br/>Set path and load]
     InitSettings --> ShowConfig[Show Configuration Menu]
     
-    ShowConfig --> WaitConfig{User Saves<br/>Configuration?}
+    ShowConfig --> WaitConfig{User Clicks<br/>Save and Start?}
     WaitConfig -->|No| ShowConfig
     WaitConfig -->|Yes| LoadConfig[Load Configuration<br/>from file]
     
@@ -37,30 +37,25 @@ flowchart TD
     
     StartThreads --> Thread1[Thread: Check Updates]
     StartThreads --> Thread2[Thread: Enable Update Menu]
-    StartThreads --> Thread3[Thread: Build GUI]
     StartThreads --> Thread4[Thread: VLC Loop]
     StartThreads --> Thread5[Thread: Poll Chat]
     StartThreads --> Thread6[Thread: Update Slider]
     StartThreads --> Thread7[Thread: Update Now Playing]
     StartThreads --> Thread8[Thread: Start Theme Watcher]
     
-    Thread1 --> MainLoop[Main Application Loop]
+    Thread1 --> MainLoop[Main: Run PySide6 GUI<br/>run_gui - blocks on QApplication.exec]
     Thread2 --> MainLoop
-    Thread3 --> MainLoop
     Thread4 --> MainLoop
     Thread5 --> MainLoop
     Thread6 --> MainLoop
     Thread7 --> MainLoop
     Thread8 --> MainLoop
     
-    MainLoop --> CheckExit{should_exit<br/>flag set?}
-    CheckExit -->|No| Sleep[Sleep 1 second]
-    Sleep --> MainLoop
-    CheckExit -->|Yes| Cleanup[Cleanup Resources]
+    MainLoop --> Cleanup[On quit: Cleanup Resources<br/>exec returns when user closes window]
     Cleanup --> StopVLC[Stop VLC Player<br/>Release Resources]
     StopVLC --> StopWatcher[Stop Theme File Watcher]
-    StopWatcher --> CloseGUI[Close GUI]
-    CloseGUI --> End([Application End])
+    StopWatcher --> QuitApp[Quit QApplication<br/>app.quit]
+    QuitApp --> End([Application End])
 ```
 
 ## Chat Message Processing Flow
@@ -220,7 +215,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start1([Update Slider Thread]) --> WaitGUI1{Slider exists?}
+    Start1([Update Slider Thread]) --> WaitGUI1{GUI_BRIDGE<br/>exists?}
     WaitGUI1 -->|No| Sleep1[Sleep 0.1 seconds]
     Sleep1 --> WaitGUI1
     WaitGUI1 -->|Yes| CheckExit1{should_exit?}
@@ -231,53 +226,53 @@ flowchart TD
     
     ValidTime -->|No| Sleep1
     ValidTime -->|Yes| CheckUserSeek{User seeked<br/>recently?}
-    CheckUserSeek -->|Yes| UpdateTimeText[Update Time Text<br/>MM:SS / MM:SS]
-    UpdateTimeText --> Sleep1
+    CheckUserSeek -->|Yes| EmitTime[Emit update_time_text<br/>GUI_BRIDGE signal]
+    EmitTime --> Sleep1
     CheckUserSeek -->|No| CalculateProgress[Calculate Progress<br/>curr / total]
-    CalculateProgress --> SetSlider[Set Slider Value<br/>ignore callback flag]
-    SetSlider --> UpdateTimeText
+    CalculateProgress --> EmitSlider[Emit update_slider<br/>GUI_BRIDGE signal]
+    EmitSlider --> EmitTime2[Emit update_time_text]
+    EmitTime2 --> Sleep1
     
     Start2([Update Now Playing Thread]) --> CheckExit2{should_exit?}
     CheckExit2 -->|Yes| End2([End Thread])
-    CheckExit2 -->|No| CallUpdate[Call update_now_playing]
+    CheckExit2 -->|No| CallUpdate[Call update_now_playing<br/>emits GUI_BRIDGE.update_now_playing]
     CallUpdate --> Sleep2[Sleep 1 second]
     Sleep2 --> CheckExit2
     
-    Start3([Theme Watcher Thread]) --> WaitGUI2{MainWindow<br/>exists?}
+    Start3([Theme Watcher Thread]) --> WaitGUI2{GUI_MAIN_WINDOW_REF<br/>populated?}
     WaitGUI2 -->|No| Sleep3[Sleep 0.1 seconds]
     Sleep3 --> WaitGUI2
     WaitGUI2 -->|Yes| StartWatcher[Start Theme File Watcher<br/>start_theme_file_watcher]
     StartWatcher --> End3([End Thread])
 ```
 
-## Configuration Menu Flow
+## Configuration Dialog Flow
 
 ```mermaid
 flowchart TD
-    Start([show_config_menu]) --> CreateContext[Create DearPyGUI Context]
-    CreateContext --> LoadThemes[Load Themes<br/>create_default_theme_files<br/>load_all_themes]
-    LoadThemes --> CreateWindow[Create Config Window<br/>with all settings inputs]
+    Start([show_config_dialog]) --> GetApp[Get QApplication<br/>gui.app.get_app]
+    GetApp --> LoadThemes[Load Themes<br/>create_default_theme_files<br/>load_all_themes]
+    LoadThemes --> CreateDialog[Create Config Dialog<br/>ConfigWindow - all settings inputs]
     
-    CreateWindow --> SetupInputs[Setup Input Fields<br/>Video ID, Prefix, Command,<br/>Rate Limit, Checkboxes, etc.]
+    CreateDialog --> SetupInputs[Setup Input Fields<br/>Video ID, Prefix, Command,<br/>Rate Limit, Checkboxes, etc.]
     SetupInputs --> SetupTheme[Setup Theme Dropdown<br/>get_theme_dropdown_items]
     SetupTheme --> SetupButtons[Setup Buttons<br/>Save and Start, Quit]
-    SetupButtons --> SetupCallbacks[Setup Save Callback<br/>save_and_start_callback]
     
-    SetupCallbacks --> ShowWindow[Show Viewport<br/>start_dearpygui]
-    ShowWindow --> WaitUser{User Action}
+    SetupButtons --> ExecDialog[Show Modal Dialog<br/>dialog.exec]
+    ExecDialog --> WaitUser{User Action}
     
-    WaitUser -->|Save and Start| SaveCallback[Save Callback Executed]
     WaitUser -->|Quit| QuitCallback[Quit Program<br/>quit_program]
-    QuitCallback --> End([End])
+    QuitCallback --> Reject[Reject dialog]
+    Reject --> End([Return False])
     
+    WaitUser -->|Save and Start| SaveCallback[Save and Start]
     SaveCallback --> UpdateSettings[Update Settings from GUI<br/>Settings.YOUTUBE_VIDEO_ID = input<br/>Settings.PREFIX = input<br/>etc.]
     UpdateSettings --> GetTheme[Get Selected Theme<br/>from dropdown]
     GetTheme --> SetTheme[Set Theme<br/>set_current_theme]
     SetTheme --> SaveSettings[Save Settings<br/>Settings.save]
-    SaveSettings --> ApplyTheme[Apply Theme<br/>apply_theme]
-    ApplyTheme --> StopGUI[Stop DearPyGUI<br/>stop_dearpygui]
-    StopGUI --> DestroyContext[Destroy Context<br/>destroy_context]
-    DestroyContext --> Return([Return to Main Flow])
+    SaveSettings --> ApplyTheme[Apply Theme<br/>apply_theme via theme_engine]
+    ApplyTheme --> Accept[Accept dialog]
+    Accept --> Return([Return True])
 ```
 
 ## Settings Save Flow
@@ -310,9 +305,8 @@ flowchart TD
     UpdateTimestamp --> LogChange[Log: Theme file change detected]
     LogChange --> ReloadThemes[Reload Themes<br/>unload_all_themes<br/>load_all_themes]
     
-    ReloadThemes --> ApplyCurrent[Apply Current Theme<br/>apply_theme get_current_theme]
-    ApplyCurrent --> RebuildMenu[Rebuild Theme Menu<br/>rebuild_theme_menu_items]
-    RebuildMenu --> LogSuccess[Log: Themes reloaded automatically]
+    ReloadThemes --> ApplyCurrent[Apply Current Theme<br/>apply_theme via theme_engine]
+    ApplyCurrent --> LogSuccess[Log: Themes reloaded automatically]
     LogSuccess --> End
 ```
 
@@ -338,76 +332,66 @@ flowchart TD
     CheckToast -->|No| CheckGUI
     ShowToast --> CheckGUI{MainWindow<br/>exists?}
     
-    CheckGUI -->|Yes| ShowUI[Show Download UI<br/>show_download_ui]
+    CheckGUI -->|Yes| EmitSignal[Emit show_download_ui<br/>GUI_BRIDGE signal]
     CheckGUI -->|No| End
-    ShowUI --> EnableMenu[Enable Update Details Menu<br/>configure_item enabled=True]
+    EmitSignal --> EnableMenu[Slot: Enable Update Details Menu<br/>show download banner]
     EnableMenu --> End
 ```
 
-## Ban/Unban Flow
+## Ban/Unban Flow (Moderation Windows)
 
 ```mermaid
 flowchart TD
-    Start([Ban User Callback]) --> GetInput[Get Input Value<br/>get_value ban_user_input]
+    Start([User adds in Moderation modal]) --> GetInput[Get Input from Dialog<br/>user ID or video ID field]
     GetInput --> StripInput[Strip Whitespace]
     StripInput --> CheckEmpty{Input<br/>empty?}
     CheckEmpty -->|Yes| End([End])
-    CheckEmpty -->|No| CheckExists{User already<br/>in list?}
+    CheckEmpty -->|No| CheckExists{User/Video already<br/>in list?}
     
     CheckExists -->|Yes| End
     CheckExists -->|No| AddPlaceholder[Add with Placeholder Name<br/>id: input, name: Loading...]
-    AddPlaceholder --> SaveList[Save List to File<br/>save_banned_users]
-    SaveList --> RefreshGUI[Refresh GUI List<br/>refresh_banned_users_list]
-    RefreshGUI --> ClearInput[Clear Input Field<br/>set_value empty]
-    ClearInput --> StartThread[Start Background Thread<br/>fetch_and_update]
+    AddPlaceholder --> SaveList[Save List to File]
+    SaveList --> EmitRefresh[Emit refresh_list<br/>GUI_BRIDGE or call refresh_*_list]
+    EmitRefresh --> StartThread[Start Background Thread<br/>fetch_channel_name / get_video_name_fromID]
     
-    StartThread --> FetchName[Fetch Channel Name<br/>fetch_channel_name]
+    StartThread --> FetchName[Fetch Real Name]
     FetchName --> UpdateEntry[Update Entry in List<br/>Replace Loading... with real name]
-    UpdateEntry --> SaveList2[Save Updated List<br/>save_banned_users]
-    SaveList2 --> RefreshGUI2[Refresh GUI List<br/>refresh_banned_users_list]
-    RefreshGUI2 --> EndThread([End Thread])
+    UpdateEntry --> SaveList2[Save Updated List]
+    SaveList2 --> EmitRefresh2[Emit refresh_list]
+    EmitRefresh2 --> EndThread([End Thread])
 ```
 
-## GUI Build Flow
+## GUI Build Flow (PySide6)
 
 ```mermaid
 flowchart TD
-    Start([build_gui]) --> CreateContext[Create DearPyGUI Context]
-    CreateContext --> CreateMainWindow[Create Main Window<br/>LYTE Control Panel]
-    CreateMainWindow --> SetPrimary[Set Primary Window]
-    SetPrimary --> CreateMenuBar[Create Menu Bar<br/>File, View, Moderation, Help]
+    Start([run_gui]) --> GetApp[Get QApplication<br/>get_app]
+    GetApp --> RegisterTheme[Register Theme Applier<br/>theme_helpers.register_theme_applier]
+    RegisterTheme --> LoadThemes[Load Themes<br/>create_default_theme_files<br/>load_all_themes]
+    LoadThemes --> ApplyInitial[Apply Current Theme<br/>theme_engine]
+    
+    ApplyInitial --> CreateBridge[Create ThreadBridge<br/>GUI_BRIDGE]
+    CreateBridge --> CreateMainWindow[Create MainWindow<br/>LYTE Control Panel]
+    CreateMainWindow --> CreateMenuBar[Create Menu Bar<br/>File, View, Moderation, Help]
     
     CreateMenuBar --> CreateFileMenu[File Menu<br/>Reload Config, Settings, Quit]
     CreateMenuBar --> CreateViewMenu[View Menu<br/>Theme submenu, Open Themes Folder, Reload Themes]
     CreateMenuBar --> CreateModMenu[Moderation Menu<br/>Queue History, Banned Users/Videos,<br/>Whitelisted Users/Videos]
     CreateMenuBar --> CreateHelpMenu[Help Menu<br/>Version, Check Updates,<br/>GitHub Issues, Documentation]
     
-    CreateHelpMenu --> CreateNowPlaying[Create Now Playing Display<br/>add_text]
+    CreateHelpMenu --> CreateNowPlaying[Create Now Playing Label]
     CreateNowPlaying --> CreateControls[Create Playback Controls<br/>Play/Pause, Previous, Next, Refresh]
-    CreateControls --> CreateVolume[Create Volume Slider<br/>add_slider_float]
-    CreateVolume --> CreateProgress[Create Song Progress Slider<br/>add_slider_float + time display]
-    CreateProgress --> CreateConsole[Create Console Output<br/>add_input_text multiline readonly]
+    CreateControls --> CreateVolume[Create Volume Slider]
+    CreateVolume --> CreateProgress[Create Song Progress Slider<br/>+ time display]
+    CreateProgress --> CreateConsole[Create Console<br/>QPlainTextEdit readonly]
     
     CreateConsole --> SetupLogger[Setup GUI Logger<br/>GuiLogger class]
-    SetupLogger --> CreateSettingsWindow[Create Settings Window<br/>All config inputs]
-    CreateSettingsWindow --> CreateBanWindows[Create Ban/Whitelist Windows<br/>BannedUsersWindow, BannedIDsWindow, etc.]
-    CreateBanWindows --> CreateQueueWindow[Create Queue History Window]
-    CreateQueueWindow --> CreateUpdateWindow[Create Update Details Window]
+    SetupLogger --> ConnectSignals[Connect ThreadBridge signals<br/>to widget slots]
     
-    CreateUpdateWindow --> CreateThemes[Create Default Theme Files<br/>create_default_theme_files]
-    CreateThemes --> LoadThemes[Load All Themes<br/>load_all_themes]
-    LoadThemes --> CheckTheme{Current theme<br/>exists?}
-    
-    CheckTheme -->|No| SetDefault[Set Default Theme<br/>dark_theme or first available]
-    CheckTheme -->|Yes| CreateViewport[Create Viewport<br/>create_viewport]
-    SetDefault --> CreateViewport
-    
-    CreateViewport --> ApplyTheme[Apply Current Theme<br/>apply_theme]
-    ApplyTheme --> SetupGUI[Setup DearPyGUI<br/>setup_dearpygui]
-    SetupGUI --> ShowViewport[Show Viewport<br/>show_viewport]
-    ShowViewport --> SetExitCallback[Set Exit Callback<br/>on_close_attempt]
-    SetExitCallback --> StartGUI[Start DearPyGUI<br/>start_dearpygui]
-    StartGUI --> End([GUI Running])
+    ConnectSignals --> ShowWindow[Show MainWindow<br/>mw.show]
+    ShowWindow --> StartWatcher[Start Theme File Watcher]
+    StartWatcher --> ExecApp[Run QApplication.exec]
+    ExecApp --> End([Blocks until quit])
 ```
 
 ---
@@ -422,16 +406,15 @@ flowchart TD
 
 ## Thread Overview
 
-The application runs multiple background threads:
+The application runs multiple background threads. The main thread runs the PySide6 GUI (`run_gui` blocks on `QApplication.exec()`). Worker threads communicate with the GUI via `GUI_BRIDGE` Qt signals.
 
 1. **Check Updates Thread**: Periodically checks for updates
-2. **Enable Update Menu Thread**: Enables update menu when update available
-3. **Build GUI Thread**: Builds and displays the GUI
-4. **VLC Loop Thread**: Monitors VLC player state
-5. **Poll Chat Thread**: Continuously polls YouTube chat for messages
-6. **Update Slider Thread**: Updates song progress slider in real-time
-7. **Update Now Playing Thread**: Updates "Now Playing" display periodically
-8. **Theme Watcher Thread**: Starts theme file watcher after GUI ready
+2. **Enable Update Menu Thread**: Emits `show_download_ui` when update available
+3. **VLC Loop Thread**: Monitors VLC player state
+4. **Poll Chat Thread**: Continuously polls YouTube chat for messages
+5. **Update Slider Thread**: Emits `update_slider` and `update_time_text` signals
+6. **Update Now Playing Thread**: Emits `update_now_playing` signal
+7. **Theme Watcher Thread**: Starts theme file watcher after `GUI_MAIN_WINDOW_REF` is populated
 
-All threads run as daemon threads and check the `should_exit` flag for graceful shutdown.
+All worker threads run as daemon threads and check the `should_exit` flag for graceful shutdown.
 
