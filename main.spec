@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_all
 pyside6_datas, pyside6_binaries, pyside6_hiddenimports = collect_all('PySide6')
 
 added_files = [
-    ('Src/themes', 'themes'),  # Bundle themes folder into the executable (includes demo_theme.json.demo)
+    ('Src/themes', 'themes'),  # Premade themes for EXE: dark/light/demo JSON, aurora_theme.qss, custom_theme.qss.demo
 ]
 
 a = Analysis(

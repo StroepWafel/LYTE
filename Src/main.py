@@ -378,6 +378,17 @@ def reload_themes() -> None:
     load_all_themes()
     apply_theme(get_current_theme())
 
+
+def _reload_themes_with_menu_refresh() -> None:
+    """Reload themes and rebuild theme menu (for file watcher / live reload)."""
+    if GUI_MAIN_WINDOW_REF:
+        try:
+            GUI_MAIN_WINDOW_REF[0]._do_reload_themes()
+        except (AttributeError, IndexError):
+            reload_themes()
+    else:
+        reload_themes()
+
 # =============================================================================
 # THEME FILE WATCHER
 # =============================================================================
@@ -385,11 +396,10 @@ def reload_themes() -> None:
 class ThemeFileHandler(FileSystemEventHandler):
     """
     File system event handler for theme files.
-    Emits request_theme_reload so reload runs on GUI thread (thread-safe).
+    Uses QTimer.singleShot to run reload on GUI thread (thread-safe).
     """
-    def __init__(self, bridge):
+    def __init__(self):
         super().__init__()
-        self.bridge = bridge
         self.last_reload_time = 0
         self.reload_debounce_seconds = 0.5  # Debounce rapid file changes
 
@@ -403,22 +413,27 @@ class ThemeFileHandler(FileSystemEventHandler):
         # Only process events for JSON and QSS theme files
         if event.is_directory:
             return
-        
-        if not (event.src_path.endswith('.json') or event.src_path.endswith('.qss')):
+        path = getattr(event, 'dest_path', None) or event.src_path
+        if not (path.endswith('.json') or path.endswith('.qss')):
             return
-        if event.src_path.endswith('.json.demo') or event.src_path.endswith('.qss.example'):
+        if path.endswith('.json.demo') or path.endswith('.qss.example'):
             return
         
-        # Debounce rapid changes (e.g., when saving a file triggers multiple events)
+        # Debounce rapid changes (editors may trigger multiple events; Windows can fire before write completes)
         current_time = time.time()
         if current_time - self.last_reload_time < self.reload_debounce_seconds:
             return
         
-        # Request theme reload on GUI thread (avoids Qt cross-thread errors)
-        if event.event_type in ('created', 'modified', 'deleted'):
+        # Schedule theme reload on GUI thread (thread-safe). 300ms delay helps Windows: file may not be fully written yet.
+        if event.event_type in ('created', 'modified', 'deleted', 'moved'):
             self.last_reload_time = current_time
-            if self.bridge:
-                self.bridge.request_theme_reload.emit()
+            try:
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(300, _reload_themes_with_menu_refresh)
+                logging.info(f"Theme file change detected: {os.path.basename(path)} ({event.event_type}), reloading in 0.3s...")
+            except Exception:
+                if GUI_BRIDGE:
+                    GUI_BRIDGE.request_theme_reload.emit()
 
 # Global observer instance for theme file watching
 theme_observer = None
@@ -431,16 +446,14 @@ def start_theme_file_watcher() -> None:
     """
     global theme_observer
     
+    if theme_observer is not None:
+        return  # Already running (avoid duplicate observers)
     if not os.path.exists(THEMES_FOLDER):
         logging.warning(f"Themes folder does not exist: {THEMES_FOLDER}")
         return
 
-    if not GUI_BRIDGE:
-        logging.warning("GUI_BRIDGE not set; theme file watcher cannot reload themes")
-        return
-
     try:
-        event_handler = ThemeFileHandler(GUI_BRIDGE)
+        event_handler = ThemeFileHandler()
         theme_observer = Observer()
         theme_observer.schedule(event_handler, THEMES_FOLDER, recursive=False)
         theme_observer.start()

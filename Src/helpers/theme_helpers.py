@@ -6,6 +6,7 @@
 import json
 import logging
 import os
+import shutil
 import sys
 
 # =============================================================================
@@ -35,6 +36,15 @@ def init_theme_system(themes_folder: str) -> None:
     global THEMES_FOLDER
     THEMES_FOLDER = themes_folder
     os.makedirs(THEMES_FOLDER, exist_ok=True)
+
+
+def _get_bundled_themes_folder() -> str:
+    """Path to premade themes. App is shipped as EXE only: PyInstaller extracts
+    Src/themes to sys._MEIPASS/themes at runtime. Dev runs use Src/themes."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, 'themes')  # EXE: bundled themes
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(_root, 'themes')
 
 
 def _register_theme(themes: dict, theme_name: str, display_name: str, filename: str,
@@ -327,6 +337,20 @@ def create_default_theme_files() -> None:
         with open(demo_theme_path, 'w', encoding='utf-8') as f:
             json.dump(demo_theme, f, indent=4)
         logging.info(f"Created demo theme file: {demo_theme_path}")
+
+    # Copy bundled premade themes (aurora, custom template) if not present
+    bundled = _get_bundled_themes_folder()
+    if os.path.isdir(bundled):
+        for filename in ('aurora_theme.qss', 'custom_theme.qss.demo'):
+            dest = os.path.join(THEMES_FOLDER, filename)
+            if not os.path.exists(dest):
+                src = os.path.join(bundled, filename)
+                if os.path.exists(src):
+                    try:
+                        shutil.copy2(src, dest)
+                        logging.info(f"Created premade theme: {filename}")
+                    except OSError as e:
+                        logging.warning(f"Could not copy {filename}: {e}")
 
 
 def load_all_themes() -> None:

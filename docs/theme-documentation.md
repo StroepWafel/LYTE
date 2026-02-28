@@ -137,7 +137,7 @@ All color properties available in LYTE themes. Colors are applied to different U
 | `TitleBg` | Background color of window title bars. The area at the top of windows that typically contains the window title. |
 | `TitleBgActive` | Background color of the active/focused window title bar. Used to indicate which window has focus when multiple windows are open. |
 | `TitleBgCollapsed` | Background color of collapsed window title bars. Usually semi-transparent (alpha < 255) for a subtle appearance when windows are minimized or collapsed. |
-| `MenuBarBg` | Background color of the menu bar at the top of windows. The area containing File, View, Help, etc. menus. |
+| `MenuBarBg` | Background color of the menu bar at the top of windows. The area containing File, View, Moderation, Help, etc. menus. |
 | `Border` | Color of borders around frames, windows, and UI elements. Used to create visual separation between different sections. |
 | `Separator` | Color of separator lines between UI elements. Used for visual division in menus, lists, and grouped controls. |
 | `PopupBg` | Background color of popup menus, dropdown menus, and dialog boxes. Usually slightly transparent (alpha around 240–250) for a layered appearance. |
@@ -171,39 +171,41 @@ Style properties control the appearance and spacing of UI elements. These values
 - Use a color picker tool to get RGB values from images or websites
 - Use **View → Reload themes** to refresh themes after editing without restarting LYTE
 
-## Example Theme File
+## Example Theme File (JSON)
+
+The `demo_theme.json.demo` file uses a blue/ocean palette. Rename it to `.json` to use it:
 
 ```json
 {
   "name": "Demo Theme",
   "colors": {
-    "WindowBg": [25, 25, 25, 255],
-    "FrameBg": [35, 35, 35, 255],
-    "Button": [60, 70, 60, 255],
-    "ButtonHovered": [80, 120, 80, 255],
-    "ButtonActive": [100, 150, 100, 255],
-    "Text": [220, 220, 220, 255],
-    "SliderGrab": [100, 150, 100, 255],
-    "SliderGrabActive": [120, 180, 120, 255],
-    "Header": [40, 40, 40, 255],
-    "HeaderHovered": [80, 120, 80, 255],
-    "HeaderActive": [100, 150, 100, 255],
-    "ScrollbarBg": [35, 35, 35, 128],
-    "ScrollbarGrab": [60, 70, 60, 255],
-    "ScrollbarGrabHovered": [80, 120, 80, 255],
-    "ScrollbarGrabActive": [100, 150, 100, 255],
-    "CheckMark": [100, 150, 100, 255],
-    "Tab": [60, 70, 60, 255],
-    "TabHovered": [80, 120, 80, 255],
-    "TabActive": [100, 150, 100, 255],
-    "TitleBg": [25, 25, 25, 255],
-    "TitleBgActive": [40, 50, 40, 255],
-    "TitleBgCollapsed": [25, 25, 25, 128],
-    "MenuBarBg": [30, 30, 30, 255],
-    "Border": [70, 90, 70, 255],
-    "Separator": [70, 90, 70, 255],
-    "PopupBg": [35, 35, 35, 240],
-    "TextSelectedBg": [80, 120, 80, 150]
+    "WindowBg": [18, 24, 34, 255],
+    "FrameBg": [30, 40, 56, 255],
+    "Button": [40, 90, 160, 255],
+    "ButtonHovered": [55, 120, 200, 255],
+    "ButtonActive": [35, 95, 170, 255],
+    "Text": [220, 230, 245, 255],
+    "SliderGrab": [70, 140, 220, 255],
+    "SliderGrabActive": [90, 160, 240, 255],
+    "Header": [35, 50, 75, 255],
+    "HeaderHovered": [55, 120, 200, 255],
+    "HeaderActive": [40, 90, 160, 255],
+    "ScrollbarBg": [18, 24, 34, 180],
+    "ScrollbarGrab": [60, 120, 190, 255],
+    "ScrollbarGrabHovered": [80, 150, 220, 255],
+    "ScrollbarGrabActive": [55, 110, 180, 255],
+    "CheckMark": [100, 160, 240, 255],
+    "Tab": [30, 40, 56, 255],
+    "TabHovered": [55, 120, 200, 255],
+    "TabActive": [40, 90, 160, 255],
+    "TitleBg": [22, 28, 40, 255],
+    "TitleBgActive": [30, 40, 56, 255],
+    "TitleBgCollapsed": [22, 28, 40, 180],
+    "MenuBarBg": [25, 32, 48, 255],
+    "Border": [45, 60, 95, 255],
+    "Separator": [45, 60, 95, 255],
+    "PopupBg": [20, 26, 38, 245],
+    "TextSelectedBg": [55, 120, 200, 150]
   },
   "styles": {
     "FrameRounding": 8,

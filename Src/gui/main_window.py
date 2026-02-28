@@ -124,7 +124,10 @@ class MainWindow(QMainWindow):
         bridge.show_download_ui.connect(self._on_show_download_ui)
         bridge.hide_update_ui.connect(self._on_hide_update_ui)
         bridge.set_console_text.connect(self._on_append_console)
-        bridge.request_theme_reload.connect(self._on_request_theme_reload)
+        bridge.request_theme_reload.connect(
+            self._on_request_theme_reload,
+            Qt.ConnectionType.QueuedConnection
+        )
 
     def _on_prev(self):
         self.main.set_user_initiated_skip()
@@ -183,8 +186,26 @@ class MainWindow(QMainWindow):
     def _on_request_theme_reload(self):
         """Theme file changed; reload themes on GUI thread."""
         logging.info("Theme file change detected, reloading...")
-        self.main.reload_themes()
+        self._do_reload_themes()
         logging.info("Themes reloaded automatically")
+
+    def _do_reload_themes(self):
+        """Reload themes from disk and rebuild theme menu."""
+        self.main.reload_themes()
+        self._rebuild_theme_menu()
+
+    def _rebuild_theme_menu(self):
+        """Rebuild View → Theme submenu with current themes (for live reload)."""
+        self.theme_menu.clear()
+        current_display = self.main.get_available_themes().get(
+            self.main.get_current_theme(), {}
+        ).get("display_name", "")
+        for display_name in self.main.get_theme_dropdown_items():
+            action = self.theme_menu.addAction(
+                display_name, lambda dn=display_name: self._select_theme(dn)
+            )
+            action.setCheckable(True)
+            action.setChecked(display_name == current_display)
 
     def _create_menu(self):
         menubar = self.menuBar()
@@ -204,7 +225,7 @@ class MainWindow(QMainWindow):
             if display_name == self.main.get_available_themes().get(self.main.get_current_theme(), {}).get("display_name", ""):
                 action.setChecked(True)
         view_menu.addAction("Open Themes Folder", lambda: self.main.show_folder(self.main.THEMES_FOLDER))
-        view_menu.addAction("Reload themes", self.main.reload_themes)
+        view_menu.addAction("Reload themes", self._do_reload_themes)
 
         # Moderation
         mod_menu = menubar.addMenu("Moderation")
